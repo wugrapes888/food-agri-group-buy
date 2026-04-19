@@ -27,6 +27,59 @@ function getOrderSummary() {
   return SheetDB.getOrderSummary();
 }
 
+function getOrdersForExport(productNameOrGroup) {
+  return SheetDB.getOrdersForExport(productNameOrGroup);
+}
+
+function createExportFile(rows, title) {
+  const ss = SpreadsheetApp.create(title || '訂單匯出');
+  const sheet = ss.getActiveSheet();
+  sheet.setName('訂單');
+  sheet.getRange(1, 1, 1, 6).setValues([['客人姓名','商品','數量','單價','小計','取貨狀態']]);
+  sheet.getRange(1, 1, 1, 6).setFontWeight('bold');
+  if (rows.length > 0) {
+    const data = rows.map(r => [r.customer, r.product, r.qty, r.price||0, r.subtotal||0, r.status]);
+    sheet.getRange(2, 1, data.length, 6).setValues(data);
+
+    // ── 品項彙整區 ──
+    const summaryStartRow = data.length + 3;
+
+    // 標題
+    sheet.getRange(summaryStartRow, 1, 1, 4).setValues([['品項彙整', '', '', '']]);
+    sheet.getRange(summaryStartRow, 1).setFontWeight('bold').setFontSize(12);
+
+    // 小標題
+    sheet.getRange(summaryStartRow + 1, 1, 1, 4).setValues([['商品', '訂購總數', '單價', '小計']]);
+    sheet.getRange(summaryStartRow + 1, 1, 1, 4).setFontWeight('bold').setBackground('#e8eaf6');
+
+    // 統計每個品項
+    const productMap = {};
+    const productOrder = [];
+    rows.forEach(r => {
+      if (!productMap[r.product]) {
+        productMap[r.product] = { qty: 0, price: r.price || 0 };
+        productOrder.push(r.product);
+      }
+      productMap[r.product].qty += r.qty;
+    });
+
+    const summaryData = productOrder.map(name => {
+      const p = productMap[name];
+      return [name, p.qty, p.price, p.qty * p.price];
+    });
+    sheet.getRange(summaryStartRow + 2, 1, summaryData.length, 4).setValues(summaryData);
+
+    // 合計列
+    const grandTotal = summaryData.reduce((s, r) => s + r[3], 0);
+    const totalQty = summaryData.reduce((s, r) => s + r[1], 0);
+    const totalRow = summaryStartRow + 2 + summaryData.length;
+    sheet.getRange(totalRow, 1, 1, 4).setValues([['合計', totalQty, '', grandTotal]]);
+    sheet.getRange(totalRow, 1, 1, 4).setFontWeight('bold').setBackground('#c5cae9');
+  }
+  sheet.autoResizeColumns(1, 6);
+  return 'https://docs.google.com/spreadsheets/d/' + ss.getId() + '/export?format=xlsx';
+}
+
 function getBuyersByProduct(productName) {
   return SheetDB.getBuyersByProduct(productName);
 }

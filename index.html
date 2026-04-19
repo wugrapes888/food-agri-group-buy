@@ -583,6 +583,7 @@
     <div class="stat-chip stat-chip-click" onclick="showByStatus('pending')" style="cursor:pointer;" title="顯示待取貨客人">⏳ 待取 <strong id="statPending">–</strong></div>
   </div>
   <div class="header-actions">
+    <button class="btn btn-ghost" onclick="openExportModal()">📤 匯出訂單</button>
     <button class="btn btn-ghost" onclick="openOrderSummary()">📦 下單彙整</button>
     <button class="btn btn-success" onclick="openQuickAdd()" style="font-weight:700;">＋ 新增訂單</button>
     <button class="btn btn-ghost" onclick="openProductModal()">⚙️ 商品設定</button>
@@ -781,6 +782,32 @@
       <button class="btn btn-primary hidden" id="btnCsvNext2" onclick="csvGoStep3()">預覽 →</button>
       <button class="btn" style="background:var(--bg);color:var(--text);" id="btnCsvBack3" onclick="csvGoStep2()" class="hidden">← 修改</button>
       <button class="btn btn-success hidden" id="btnCsvImport" onclick="confirmImport(false, 'csv')">✅ 確認匯入</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Export Modal ── -->
+<div class="modal-backdrop hidden" id="exportModal">
+  <div class="modal" style="max-width:700px;">
+    <div class="modal-header">
+      <span class="modal-title">📤 匯出訂單</span>
+      <button class="modal-close" onclick="document.getElementById('exportModal').classList.add('hidden')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;">
+        <label style="font-size:13px;font-weight:600;white-space:nowrap;">選擇品項：</label>
+        <select id="exportProductSelect" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:7px 12px;font-size:14px;" onchange="loadExportData()">
+          <option value="__ALL__">── 全部品項 ──</option>
+        </select>
+      </div>
+      <div id="exportTableWrap" style="max-height:55vh;overflow-y:auto;">
+        <div class="empty-state" style="padding:30px;"><p>請選擇品項</p></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" style="background:var(--bg);color:var(--text);" onclick="document.getElementById('exportModal').classList.add('hidden')">關閉</button>
+      <button class="btn btn-primary" onclick="copyExportCsv()">📋 複製 CSV</button>
+      <button class="btn btn-success" id="btnDownloadExcel" onclick="downloadExportExcel()">⬇️ 下載 Excel</button>
     </div>
   </div>
 </div>
@@ -1012,7 +1039,7 @@ function renderDetail(d) {
       <td style="text-align:center;">${i.qty}</td>
       <td style="text-align:right;">$${i.price}</td>
       <td style="text-align:right;font-weight:600;">$${i.subtotal}</td>
-      <td><button class="del-btn" onclick="doDeleteRow('${esc(d.name)}','${esc(i.product)}')" title="刪除此筆">✕</button></td>
+      <td><button class="del-btn" data-customer="${esc(d.name)}" data-product="${esc(i.product)}" onclick="doDeleteRow(this.dataset.customer,this.dataset.product)" title="刪除此筆">✕</button></td>
     </tr>`).join('');
 
   document.getElementById('detailPanel').innerHTML = `
@@ -1047,7 +1074,7 @@ function renderDetail(d) {
       ${d.picked ? `<button class="btn-undo" onclick="doUndoPickup('${esc(d.name)}')">↩ 取消取貨</button>` : ''}
     </div>
     <div style="margin-top:10px;text-align:right;">
-      <button class="btn btn-danger-outline" onclick="doDeleteCustomer('${esc(d.name)}')">🗑️ 刪除此客人所有訂單</button>
+      <button class="btn btn-danger-outline" data-customer="${esc(d.name)}" onclick="doDeleteCustomer(this.dataset.customer)">🗑️ 刪除此客人所有訂單</button>
     </div>`;
 }
 
@@ -1110,6 +1137,107 @@ function doUndoPickup(customerName) {
     })
     .withFailureHandler(err => showToast(err.message, 'error'))
     .undoPickup(customerName);
+}
+
+// ════════════════════════════════════════════════════════
+// Export Orders
+// ════════════════════════════════════════════════════════
+let exportData = [];
+
+function openExportModal() {
+  document.getElementById('exportModal').classList.remove('hidden');
+  document.getElementById('exportTableWrap').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+  // 載入品項選項（來自現有商品清單）
+  google.script.run
+    .withSuccessHandler(prods => {
+      const sel = document.getElementById('exportProductSelect');
+      sel.innerHTML = '<option value="__ALL__">── 全部品項 ──</option>';
+
+      // 先列出群組，再列出獨立品項
+      const groups = prods.filter(p => p.isGroup);
+      const standalone = prods.filter(p => !p.isGroup);
+      [...groups, ...standalone].forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.name;
+        opt.textContent = p.name + (p.isGroup ? '（群組）' : '');
+        sel.appendChild(opt);
+      });
+
+      loadExportData();
+    })
+    .withFailureHandler(err => showToast(err.message, 'error'))
+    .getProducts();
+}
+
+function loadExportData() {
+  const val = document.getElementById('exportProductSelect').value;
+  document.getElementById('exportTableWrap').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+  google.script.run
+    .withSuccessHandler(rows => {
+      exportData = rows;
+      renderExportTable(rows);
+    })
+    .withFailureHandler(err => showToast(err.message, 'error'))
+    .getOrdersForExport(val);
+}
+
+function renderExportTable(rows) {
+  if (!rows.length) {
+    document.getElementById('exportTableWrap').innerHTML = '<div class="empty-state" style="padding:30px;"><p>沒有訂單資料</p></div>';
+    return;
+  }
+
+  const tbody = rows.map(r => `
+    <tr>
+      <td>${r.customer}</td>
+      <td>${r.product}</td>
+      <td style="text-align:center;">${r.qty}</td>
+      <td style="text-align:right;">${r.price ? '$'+r.price : '–'}</td>
+      <td style="text-align:right;">${r.subtotal ? '$'+r.subtotal : '–'}</td>
+      <td><span style="font-size:12px;padding:2px 8px;border-radius:10px;background:${r.status==='已取貨'?'#d1fae5':'#fef3c7'};color:${r.status==='已取貨'?'#065f46':'#92400e'};">${r.status}</span></td>
+    </tr>`).join('');
+
+  document.getElementById('exportTableWrap').innerHTML = `
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">共 ${rows.length} 筆訂單</p>
+    <table class="ocr-table">
+      <thead><tr><th>客人姓名</th><th>商品</th><th>數量</th><th>單價</th><th>小計</th><th>狀態</th></tr></thead>
+      <tbody>${tbody}</tbody>
+    </table>`;
+}
+
+function copyExportCsv() {
+  if (!exportData.length) { showToast('沒有資料可複製', 'error'); return; }
+  const header = '客人姓名,商品,數量,單價,小計,取貨狀態';
+  const lines = exportData.map(r => `${r.customer},${r.product},${r.qty},${r.price||0},${r.subtotal||0},${r.status}`);
+  navigator.clipboard.writeText([header, ...lines].join('\n'))
+    .then(() => showToast('已複製 CSV 到剪貼簿', 'success'))
+    .catch(() => showToast('複製失敗，請手動選取', 'error'));
+}
+
+function downloadExportExcel() {
+  if (!exportData.length) { showToast('沒有資料可下載', 'error'); return; }
+  const btn = document.getElementById('btnDownloadExcel');
+  btn.disabled = true;
+  btn.textContent = '建立中…';
+
+  const sel = document.getElementById('exportProductSelect');
+  const title = '訂單匯出_' + sel.options[sel.selectedIndex].text.replace(/[（）()\s]/g, '');
+
+  google.script.run
+    .withSuccessHandler(url => {
+      window.open(url, '_blank');
+      btn.disabled = false;
+      btn.textContent = '⬇️ 下載 Excel';
+      showToast('Excel 已建立，正在下載', 'success');
+    })
+    .withFailureHandler(err => {
+      showToast('下載失敗：' + err.message, 'error');
+      btn.disabled = false;
+      btn.textContent = '⬇️ 下載 Excel';
+    })
+    .createExportFile(exportData, title);
 }
 
 // ════════════════════════════════════════════════════════

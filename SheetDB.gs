@@ -431,6 +431,36 @@ const SheetDB = (() => {
     return { success: true, count: products.length };
   }
 
+  function getOrdersForExport(productNameOrGroup) {
+    const productSheet = getSheet(SHEET.PRODUCTS);
+    const ordersSheet = getSheet(SHEET.ORDERS);
+
+    // 找出所有屬於此群組或品項的商品名稱
+    const productData = productSheet.getDataRange().getValues();
+    const matchProducts = new Set();
+    if (productNameOrGroup === '__ALL__') {
+      productData.slice(1).forEach(r => { if (r[0]) matchProducts.add(r[0]); });
+    } else {
+      productData.slice(1).forEach(r => {
+        if (!r[0]) return;
+        if (r[5] === productNameOrGroup) matchProducts.add(r[0]);
+      });
+      if (matchProducts.size === 0) matchProducts.add(productNameOrGroup);
+    }
+
+    const orderData = ordersSheet.getDataRange().getValues();
+    const rows = orderData.slice(1).filter(r => r[0] && matchProducts.has(r[1]));
+
+    return rows.map(r => ({
+      customer: r[0],
+      product: r[1],
+      qty: r[2],
+      price: r[3],
+      subtotal: r[4],
+      status: r[5]
+    }));
+  }
+
   function getOrderSummary() {
     const productSheet = getSheet(SHEET.PRODUCTS);
     const ordersSheet = getSheet(SHEET.ORDERS);
@@ -502,6 +532,9 @@ const SheetDB = (() => {
     getProductsForManagement,
     saveProduct,
     deleteProduct,
-    batchSaveProducts
+    batchSaveProducts,
+    deleteOrderRow,
+    deleteCustomerAllOrders,
+    getOrdersForExport
   };
 })();
