@@ -1,0 +1,1611 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>團購發貨系統</title>
+<style>
+  :root {
+    --bg: #f0f2f5;
+    --surface: #ffffff;
+    --primary: #4f46e5;
+    --primary-light: #eef2ff;
+    --success: #16a34a;
+    --success-light: #dcfce7;
+    --danger: #dc2626;
+    --danger-light: #fee2e2;
+    --warning: #d97706;
+    --warning-light: #fef3c7;
+    --text: #111827;
+    --text-muted: #6b7280;
+    --border: #e5e7eb;
+    --radius: 12px;
+    --shadow: 0 1px 3px rgba(0,0,0,.1), 0 1px 2px rgba(0,0,0,.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,.1), 0 4px 6px -2px rgba(0,0,0,.05);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Header ── */
+  .header {
+    background: var(--primary);
+    color: #fff;
+    padding: 0 20px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    box-shadow: var(--shadow-lg);
+    z-index: 10;
+  }
+
+  .header h1 { font-size: 18px; font-weight: 700; letter-spacing: .5px; }
+
+  .header-stats {
+    display: flex;
+    gap: 16px;
+    font-size: 13px;
+  }
+
+  .stat-chip {
+    background: rgba(255,255,255,.15);
+    padding: 4px 12px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .stat-chip strong { font-size: 15px; }
+
+  .header-actions { display: flex; gap: 8px; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all .15s;
+  }
+
+  .btn:hover { opacity: .85; transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+
+  .btn-white {
+    background: #fff;
+    color: var(--primary);
+  }
+
+  .btn-ghost {
+    background: rgba(255,255,255,.15);
+    color: #fff;
+  }
+
+  .btn-primary {
+    background: var(--primary);
+    color: #fff;
+  }
+
+  .btn-success {
+    background: var(--success);
+    color: #fff;
+  }
+
+  .btn-danger-outline {
+    background: transparent;
+    color: var(--danger);
+    border: 1.5px solid var(--danger);
+    font-size: 12px;
+    padding: 5px 10px;
+  }
+
+  /* ── Layout ── */
+  .layout {
+    display: grid;
+    grid-template-columns: 220px 280px 1fr;
+    gap: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid var(--border);
+  }
+
+  .panel:last-child { border-right: none; }
+
+  .panel-header {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    background: var(--surface);
+  }
+
+  .panel-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  .panel-body {
+    overflow-y: auto;
+    flex: 1;
+    background: var(--bg);
+  }
+
+  /* ── Search ── */
+  .search-box {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+    outline: none;
+    transition: border-color .15s;
+  }
+
+  .search-box:focus { border-color: var(--primary); }
+
+  /* ── Product List ── */
+  .product-item {
+    padding: 12px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    transition: background .1s;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .product-item:hover { background: var(--primary-light); }
+
+  .product-item.active {
+    background: var(--primary-light);
+    border-left: 3px solid var(--primary);
+  }
+
+  .product-name { font-size: 14px; font-weight: 600; }
+
+  .product-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .stock-badge {
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 11px;
+  }
+
+  .stock-ok { background: var(--success-light); color: var(--success); }
+  .stock-low { background: var(--warning-light); color: var(--warning); }
+  .stock-zero { background: var(--danger-light); color: var(--danger); }
+
+  /* ── Buyer List ── */
+  .buyer-item {
+    padding: 12px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background .1s;
+  }
+
+  .buyer-item:hover { background: var(--primary-light); }
+  .buyer-item.active { background: var(--primary-light); border-left: 3px solid var(--primary); }
+
+  .buyer-name { font-size: 14px; font-weight: 600; }
+  .buyer-qty { font-size: 12px; color: var(--text-muted); }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .dot-pending { background: var(--warning); }
+  .dot-picked { background: var(--success); }
+
+  /* ── Detail Panel ── */
+  .detail-wrap {
+    padding: 20px;
+    background: var(--bg);
+    height: 100%;
+    overflow-y: auto;
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-muted);
+    gap: 12px;
+  }
+
+  .empty-icon { font-size: 48px; }
+
+  .detail-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .detail-card-header {
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .customer-name-big { font-size: 20px; font-weight: 700; }
+
+  .status-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .badge-pending { background: var(--warning-light); color: var(--warning); }
+  .badge-picked  { background: var(--success-light); color: var(--success); }
+
+  .order-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+
+  .order-table th {
+    background: var(--bg);
+    padding: 10px 16px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: .5px;
+    text-transform: uppercase;
+  }
+
+  .order-table td {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  .order-table tr:hover td { background: var(--bg); }
+
+  .detail-footer {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+  }
+
+  .total-label { font-size: 13px; color: var(--text-muted); }
+  .total-amount { font-size: 22px; font-weight: 800; color: var(--primary); }
+
+  .action-row {
+    margin-top: 16px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .btn-complete {
+    flex: 1;
+    padding: 14px;
+    font-size: 16px;
+    border-radius: 10px;
+    background: var(--success);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    font-weight: 700;
+    transition: all .15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .btn-complete:hover { background: #15803d; }
+  .btn-complete:disabled { background: #d1fae5; color: #6ee7b7; cursor: not-allowed; transform: none; }
+
+  .btn-undo {
+    padding: 14px 20px;
+    font-size: 14px;
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--text-muted);
+    border: 1.5px solid var(--border);
+    cursor: pointer;
+    font-weight: 600;
+    transition: all .15s;
+  }
+
+  .btn-undo:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* ── Modal ── */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+
+  .modal {
+    background: var(--surface);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 640px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .modal-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .modal-title { font-size: 18px; font-weight: 700; }
+
+  .modal-close {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 4px;
+    line-height: 1;
+  }
+
+  .modal-body { padding: 20px 24px; }
+  .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; }
+
+  /* ── Upload Zone ── */
+  .upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all .15s;
+    color: var(--text-muted);
+  }
+
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--primary);
+    background: var(--primary-light);
+  }
+
+  .upload-zone .upload-icon { font-size: 40px; margin-bottom: 10px; }
+  .upload-zone p { font-size: 14px; }
+  .upload-zone strong { color: var(--primary); }
+
+  #fileInput { display: none; }
+
+  .preview-img {
+    width: 100%;
+    max-height: 240px;
+    object-fit: contain;
+    border-radius: 8px;
+    margin-top: 12px;
+    border: 1px solid var(--border);
+  }
+
+  /* ── OCR 結果表格 ── */
+  .ocr-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 12px; }
+  .ocr-table th { background: var(--bg); padding: 8px 10px; text-align: left; font-size: 12px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; }
+  .ocr-table td { padding: 8px 10px; border-top: 1px solid var(--border); }
+  .ocr-table input { width: 100%; border: 1.5px solid var(--border); border-radius: 6px; padding: 5px 8px; font-size: 13px; }
+  .ocr-table input:focus { outline: none; border-color: var(--primary); }
+  .ocr-table .del-btn { background: none; border: none; cursor: pointer; color: var(--danger); font-size: 16px; }
+
+  .price-input-row { margin-top: 16px; }
+  .price-input-row label { font-size: 13px; color: var(--text-muted); display: block; margin-bottom: 6px; }
+  .price-grid { display: grid; gap: 8px; }
+  .price-row { display: flex; align-items: center; gap: 8px; }
+  .price-row span { flex: 1; font-size: 14px; font-weight: 600; }
+  .price-row input { width: 100px; border: 1.5px solid var(--border); border-radius: 6px; padding: 5px 8px; font-size: 13px; }
+
+  /* ── Loading ── */
+  .loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 30px;
+    color: var(--text-muted);
+  }
+
+  .spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: #1f2937;
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: var(--shadow-lg);
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all .25s;
+    z-index: 200;
+    max-width: 320px;
+  }
+
+  #toast.show { transform: translateY(0); opacity: 1; }
+  #toast.success { background: var(--success); }
+  #toast.error { background: var(--danger); }
+
+  .section-label { font-size: 13px; font-weight: 700; color: var(--text-muted); margin: 16px 0 8px; text-transform: uppercase; letter-spacing: .5px; }
+
+  .danger-zone { margin-top: 24px; padding-top: 16px; border-top: 1px dashed var(--border); text-align: right; }
+
+  /* ── Product Management ── */
+  .prod-mgmt-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .prod-mgmt-table th { background: var(--bg); padding: 8px 12px; text-align: left; font-size: 12px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; }
+  .prod-mgmt-table td { padding: 8px 10px; border-top: 1px solid var(--border); vertical-align: middle; }
+  .prod-mgmt-table input { border: 1.5px solid var(--border); border-radius: 6px; padding: 5px 8px; font-size: 13px; width: 100%; }
+  .prod-mgmt-table input:focus { outline: none; border-color: var(--primary); }
+  .prod-mgmt-table select { border: 1.5px solid var(--border); border-radius: 6px; padding: 5px 8px; font-size: 13px; width: 100%; background: #fff; }
+  .type-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+  .type-一般 { background: #e0e7ff; color: #4338ca; }
+  .type-規格 { background: #fce7f3; color: #be185d; }
+  .type-組合 { background: #d1fae5; color: #065f46; }
+
+  /* ── Wizard ── */
+  .wz-group { background: var(--bg); border-radius: 10px; padding: 14px; margin-bottom: 12px; border: 1.5px solid var(--border); }
+  .wz-group-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .wz-group-header label { font-size: 12px; color: var(--text-muted); font-weight: 700; white-space: nowrap; }
+  .wz-group-header input { border: 1.5px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 14px; }
+  .wz-group-header input:focus { outline: none; border-color: var(--primary); }
+  .wz-group-header input.name-input { flex: 1; min-width: 100px; font-weight: 700; }
+  .wz-group-header input.price-input { width: 80px; }
+  .wz-variant-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .wz-variant-row input { border: 1.5px solid var(--border); border-radius: 6px; padding: 5px 8px; font-size: 13px; }
+  .wz-variant-row input.vname { flex: 1; }
+  .wz-variant-row input.vprice { width: 80px; }
+  .wz-variant-label { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+  .wz-order-block { margin-bottom: 16px; }
+  .wz-order-block h4 { font-size: 14px; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+  .wz-price-tag { font-size: 12px; color: var(--primary); background: var(--primary-light); padding: 2px 8px; border-radius: 10px; }
+
+  /* ── Paste area ── */
+  .paste-area { width: 100%; min-height: 160px; padding: 12px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 13px; line-height: 1.6; resize: vertical; font-family: inherit; }
+  .paste-area:focus { outline: none; border-color: var(--primary); }
+
+  /* ── Tabs ── */
+  .tab-bar {
+    display: flex;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 20px;
+  }
+
+  .tab-btn {
+    flex: 1;
+    padding: 10px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-muted);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all .15s;
+  }
+
+  .tab-btn.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+  }
+
+  /* ── Manual input table ── */
+  .manual-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .manual-table th { background: var(--bg); padding: 8px 8px; text-align: left; font-size: 12px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; }
+  .manual-table td { padding: 5px 4px; border-top: 1px solid var(--border); }
+  .manual-table input { width: 100%; border: 1.5px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+  .manual-table input:focus { outline: none; border-color: var(--primary); }
+  .manual-table .del-btn { background: none; border: none; cursor: pointer; color: var(--danger); font-size: 16px; padding: 0 4px; }
+
+  .hidden { display: none !important; }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<div class="header">
+  <h1>🛒 團購發貨系統</h1>
+  <div class="header-stats" id="statsBar">
+    <div class="stat-chip">客人 <strong id="statTotal">–</strong></div>
+    <div class="stat-chip">✅ 已取 <strong id="statPicked">–</strong></div>
+    <div class="stat-chip">⏳ 待取 <strong id="statPending">–</strong></div>
+    <div class="stat-chip">💰 <strong id="statRevenue">–</strong></div>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-ghost" onclick="openProductModal()">⚙️ 商品設定</button>
+    <button class="btn btn-ghost" onclick="openImportModal()">📋 匯入訂單</button>
+    <button class="btn btn-white" onclick="refreshAll()">↺ 重整</button>
+  </div>
+</div>
+
+<!-- ── Main Layout ── -->
+<div class="layout">
+
+  <!-- 左欄：商品清單 -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">商品清單</div>
+    </div>
+    <div class="panel-body" id="productList">
+      <div class="loading"><div class="spinner"></div><span>載入中…</span></div>
+    </div>
+  </div>
+
+  <!-- 中欄：買家列表 -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">買這個的客人</div>
+      <input class="search-box" id="buyerSearch" placeholder="🔍 搜尋客人姓名…" oninput="filterBuyers()" />
+    </div>
+    <div class="panel-body" id="buyerList">
+      <div class="empty-state">
+        <span class="empty-icon">👈</span>
+        <p>請先選擇商品</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右欄：客人明細 -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">客人明細</div>
+    </div>
+    <div class="panel-body">
+      <div class="detail-wrap" id="detailPanel">
+        <div class="empty-state">
+          <span class="empty-icon">👈</span>
+          <p>請選擇客人查看明細</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Import Modal ── -->
+<div class="modal-backdrop hidden" id="importModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">📋 匯入訂單</span>
+      <button class="modal-close" onclick="closeImportModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody">
+
+      <!-- Tab Bar -->
+      <div class="tab-bar">
+        <button class="tab-btn active" id="tabOcr" onclick="switchTab('ocr')">📷 截圖辨識</button>
+        <button class="tab-btn" id="tabManual" onclick="switchTab('manual')">✏️ 手動輸入</button>
+      </div>
+
+      <!-- ── OCR Tab ── -->
+      <div id="ocrTab">
+        <!-- Step 1: Upload -->
+        <div id="step1">
+          <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+            <div class="upload-icon">🖼️</div>
+            <p>點擊或拖曳 <strong>LINE 截圖</strong> 到此處</p>
+            <p style="font-size:12px;margin-top:6px;">支援 JPG、PNG，建議截圖清晰</p>
+          </div>
+          <input type="file" id="fileInput" accept="image/*" onchange="handleFileSelect(event)">
+          <img id="previewImg" class="preview-img hidden">
+        </div>
+
+        <!-- Step 2: OCR Loading -->
+        <div id="step2" class="hidden">
+          <div class="loading">
+            <div class="spinner"></div>
+            <span>AI 正在辨識訂單內容，請稍候…</span>
+          </div>
+        </div>
+
+        <!-- Step 3: Review & Edit -->
+        <div id="step3" class="hidden">
+          <p id="ocrSummary" style="font-size:13px;color:var(--text-muted);margin-bottom:12px;"></p>
+
+          <!-- AI 建議的品項結構 -->
+          <div id="ocrProductSection" class="hidden" style="margin-bottom:16px;">
+            <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">
+              🤖 AI 建議品項結構（可編輯）
+            </div>
+            <div id="ocrProductBlocks"></div>
+          </div>
+
+          <!-- 訂單表格 -->
+          <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">
+            📋 訂單明細
+          </div>
+          <table class="ocr-table" id="ocrTable">
+            <thead><tr><th>客人</th><th>商品（規格）</th><th>數量</th><th>單價</th><th></th></tr></thead>
+            <tbody id="ocrBody"></tbody>
+          </table>
+          <button class="btn btn-primary" style="margin-top:12px;width:100%;justify-content:center;" onclick="addOcrRow()">＋ 新增一行</button>
+          <div class="danger-zone">
+            <button class="btn btn-danger-outline" onclick="confirmClear('ocr')">🗑️ 清除舊資料後匯入</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Wizard Tab ── -->
+      <div id="manualTab" class="hidden">
+
+        <!-- Wizard Step 1: 定義品項 -->
+        <div id="wzStep1">
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">先設定這次要開團的品項名稱與各規格價格。</p>
+
+          <div id="wzGroupList"></div>
+          <button class="btn btn-primary" style="margin-top:10px;width:100%;justify-content:center;" onclick="addWzGroup()">＋ 新增品項</button>
+        </div>
+
+        <!-- Wizard Step 2: 每規格輸入名單 -->
+        <div id="wzStep2" class="hidden">
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">每個規格貼上客人名單，每行一位，格式：<strong>姓名 數量</strong>（數量可省略，預設為 1）</p>
+          <div id="wzOrderInputs"></div>
+        </div>
+
+        <!-- Wizard Step 3: 預覽 -->
+        <div id="wzStep3" class="hidden">
+          <p id="wzSummary" style="font-size:13px;color:var(--text-muted);margin-bottom:12px;"></p>
+          <table class="ocr-table">
+            <thead><tr><th>客人</th><th>商品（規格）</th><th>數量</th><th>單價</th><th></th></tr></thead>
+            <tbody id="wzPreviewBody"></tbody>
+          </table>
+          <div class="danger-zone">
+            <button class="btn btn-danger-outline" onclick="confirmClear('wizard')">🗑️ 清除舊資料後匯入</button>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn" style="background:var(--bg);color:var(--text);" onclick="closeImportModal()">取消</button>
+      <button class="btn btn-primary hidden" id="btnRecognize" onclick="runOCR()">✨ AI 辨識截圖</button>
+      <button class="btn btn-success hidden" id="btnImport" onclick="confirmImport(false, 'ocr')">✅ 確認匯入</button>
+      <button class="btn btn-primary hidden" id="btnWzNext1" onclick="wzGoStep2()">下一步 →</button>
+      <button class="btn" style="background:var(--bg);color:var(--text);" id="btnWzBack2" onclick="wzGoStep1()" class="hidden">← 上一步</button>
+      <button class="btn btn-primary hidden" id="btnWzNext2" onclick="wzGoStep3()">預覽 →</button>
+      <button class="btn" style="background:var(--bg);color:var(--text);" id="btnWzBack3" onclick="wzGoStep2()" class="hidden">← 修改</button>
+      <button class="btn btn-success hidden" id="btnWzImport" onclick="confirmImport(false, 'wizard')">✅ 確認匯入</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Product Management Modal ── -->
+<div class="modal-backdrop hidden" id="productModal">
+  <div class="modal" style="max-width:700px;">
+    <div class="modal-header">
+      <span class="modal-title">⚙️ 商品設定</span>
+      <button class="modal-close" onclick="closeProductModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <table class="prod-mgmt-table" id="prodMgmtTable">
+        <thead>
+          <tr>
+            <th style="width:32%">商品名稱</th>
+            <th style="width:16%">單價($)</th>
+            <th style="width:18%">類型</th>
+            <th style="width:26%">備註（如組合內容）</th>
+            <th style="width:8%"></th>
+          </tr>
+        </thead>
+        <tbody id="prodMgmtBody"></tbody>
+      </table>
+      <button class="btn btn-primary" style="margin-top:12px;width:100%;justify-content:center;" onclick="addProdRow()">＋ 新增商品</button>
+      <div style="margin-top:16px;padding:12px;background:var(--primary-light);border-radius:8px;font-size:13px;color:var(--text-muted);">
+        💡 <strong>規格</strong>：同商品不同口味，建議命名如「冰淇淋-草莓」「冰淇淋-巧克力」<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<strong>組合</strong>：固定搭配套餐，備註欄填入組合內容方便自己記錄
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" style="background:var(--bg);color:var(--text);" onclick="closeProductModal()">取消</button>
+      <button class="btn btn-success" onclick="saveAllProducts()">💾 儲存全部</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════════════════
+// State
+// ════════════════════════════════════════════════════════
+let products = [];
+let buyers = [];
+let activeProduct = null;
+let activeCustomer = null;
+let ocrOrders = [];
+let imageBase64 = null;
+
+// ════════════════════════════════════════════════════════
+// Init
+// ════════════════════════════════════════════════════════
+window.onload = () => refreshAll();
+
+function refreshAll() {
+  loadProducts();
+  loadStats();
+  if (activeCustomer) loadDetail(activeCustomer);
+}
+
+// ════════════════════════════════════════════════════════
+// Products
+// ════════════════════════════════════════════════════════
+function loadProducts() {
+  google.script.run
+    .withSuccessHandler(data => {
+      products = data;
+      renderProducts();
+      if (activeProduct) {
+        const still = products.find(p => p.name === activeProduct);
+        if (still) loadBuyers(activeProduct);
+      }
+    })
+    .withFailureHandler(err => showToast(err.message, 'error'))
+    .getProducts();
+}
+
+function renderProducts() {
+  const el = document.getElementById('productList');
+  if (!products.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:30px;"><span class="empty-icon">📦</span><p>尚無商品，請先設定商品或匯入訂單</p></div>';
+    return;
+  }
+
+  el.innerHTML = products.map(p => {
+    const pct = p.totalQty > 0 ? p.remainingQty / p.totalQty : 1;
+    const cls = pct > 0.5 ? 'stock-ok' : pct > 0 ? 'stock-low' : 'stock-zero';
+    const active = p.name === activeProduct ? 'active' : '';
+    const groupTag = p.isGroup ? '<span style="font-size:10px;background:#e0e7ff;color:#4338ca;padding:1px 6px;border-radius:8px;margin-left:6px;">組合</span>' : '';
+    const priceStr = p.price != null ? `單價 $${p.price}` : '多規格';
+    return `
+      <div class="product-item ${active}" onclick="selectProduct('${esc(p.name)}')">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span class="product-name">${p.name}${groupTag}</span>
+          <span class="stock-badge ${cls}">剩 ${p.remainingQty}</span>
+        </div>
+        <div class="product-meta">
+          <span>${priceStr}</span>
+          <span>總量 ${p.totalQty}</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function selectProduct(name) {
+  activeProduct = name;
+  activeCustomer = null;
+  document.getElementById('detailPanel').innerHTML = `
+    <div class="empty-state"><span class="empty-icon">👈</span><p>請選擇客人查看明細</p></div>`;
+  renderProducts();
+  loadBuyers(name);
+}
+
+// ════════════════════════════════════════════════════════
+// Buyers
+// ════════════════════════════════════════════════════════
+function loadBuyers(productName) {
+  const el = document.getElementById('buyerList');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+  google.script.run
+    .withSuccessHandler(data => {
+      buyers = data;
+      renderBuyers();
+    })
+    .withFailureHandler(err => showToast(err.message, 'error'))
+    .getBuyersByProduct(productName);
+}
+
+function renderBuyers() {
+  const el = document.getElementById('buyerList');
+  const q = document.getElementById('buyerSearch').value.trim().toLowerCase();
+  const filtered = buyers.filter(b => b.name.toLowerCase().includes(q));
+
+  if (!filtered.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:30px;"><span>找不到符合的客人</span></div>';
+    return;
+  }
+
+  el.innerHTML = filtered.map(b => {
+    const active = b.name === activeCustomer ? 'active' : '';
+    const dot = b.status === '已取貨' ? 'dot-picked' : 'dot-pending';
+    return `
+      <div class="buyer-item ${active}" onclick="selectCustomer('${esc(b.name)}')">
+        <div>
+          <div class="buyer-name">${b.name}</div>
+          <div class="buyer-qty">購買 ${b.qty} 件</div>
+        </div>
+        <div class="status-dot ${dot}"></div>
+      </div>`;
+  }).join('');
+}
+
+function filterBuyers() { renderBuyers(); }
+
+function selectCustomer(name) {
+  activeCustomer = name;
+  renderBuyers();
+  loadDetail(name);
+}
+
+// ════════════════════════════════════════════════════════
+// Detail
+// ════════════════════════════════════════════════════════
+function loadDetail(customerName) {
+  const el = document.getElementById('detailPanel');
+  el.innerHTML = '<div class="loading" style="padding-top:60px;"><div class="spinner"></div></div>';
+
+  google.script.run
+    .withSuccessHandler(data => renderDetail(data))
+    .withFailureHandler(err => showToast(err.message, 'error'))
+    .getCustomerDetail(customerName);
+}
+
+function renderDetail(d) {
+  if (!d) {
+    document.getElementById('detailPanel').innerHTML =
+      '<div class="empty-state"><span class="empty-icon">❓</span><p>找不到客人資料</p></div>';
+    return;
+  }
+
+  const badgeCls = d.picked ? 'badge-picked' : 'badge-pending';
+  const badgeText = d.picked ? '✅ 已取貨' : '⏳ 待取貨';
+
+  const rows = d.items.map(i => `
+    <tr>
+      <td>${i.product}</td>
+      <td style="text-align:center;">${i.qty}</td>
+      <td style="text-align:right;">$${i.price}</td>
+      <td style="text-align:right;font-weight:600;">$${i.subtotal}</td>
+      <td><button class="del-btn" onclick="doDeleteRow('${esc(d.name)}','${esc(i.product)}')" title="刪除此筆">✕</button></td>
+    </tr>`).join('');
+
+  document.getElementById('detailPanel').innerHTML = `
+    <div class="detail-card">
+      <div class="detail-card-header">
+        <span class="customer-name-big">${d.name}</span>
+        <span class="status-badge ${badgeCls}">${badgeText}</span>
+      </div>
+      <table class="order-table">
+        <thead>
+          <tr>
+            <th>商品</th>
+            <th style="text-align:center;">數量</th>
+            <th style="text-align:right;">單價</th>
+            <th style="text-align:right;">小計</th>
+            <th style="width:36px;"></th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="detail-footer">
+        <span class="total-label">合計金額</span>
+        <span class="total-amount">$${d.total.toLocaleString()}</span>
+      </div>
+    </div>
+    <div class="action-row">
+      <button class="btn-complete" id="btnComplete"
+        onclick="doCompletePickup('${esc(d.name)}')"
+        ${d.picked ? 'disabled' : ''}>
+        ${d.picked ? '✅ 已取貨' : '🎉 完成取貨'}
+      </button>
+      ${d.picked ? `<button class="btn-undo" onclick="doUndoPickup('${esc(d.name)}')">↩ 取消取貨</button>` : ''}
+    </div>
+    <div style="margin-top:10px;text-align:right;">
+      <button class="btn btn-danger-outline" onclick="doDeleteCustomer('${esc(d.name)}')">🗑️ 刪除此客人所有訂單</button>
+    </div>`;
+}
+
+// ════════════════════════════════════════════════════════
+// Pickup Actions
+// ════════════════════════════════════════════════════════
+function doCompletePickup(customerName) {
+  const btn = document.getElementById('btnComplete');
+  btn.disabled = true;
+  btn.textContent = '處理中…';
+
+  google.script.run
+    .withSuccessHandler(() => {
+      showToast(`${customerName} 取貨完成！`, 'success');
+      refreshAll();
+      loadDetail(customerName);
+    })
+    .withFailureHandler(err => {
+      showToast(err.message, 'error');
+      btn.disabled = false;
+      btn.textContent = '🎉 完成取貨';
+    })
+    .completePickup(customerName);
+}
+
+function doDeleteRow(customerName, productName) {
+  if (!confirm(`確定要刪除「${customerName}」的「${productName}」這筆訂單？`)) return;
+  google.script.run
+    .withSuccessHandler(() => {
+      showToast('已刪除', 'success');
+      refreshAll();
+      loadDetail(customerName);
+    })
+    .withFailureHandler(err => showToast(err.message, 'error'))
+    .deleteOrderRow(customerName, productName);
+}
+
+function doDeleteCustomer(customerName) {
+  if (!confirm(`確定要刪除「${customerName}」的所有訂單？此動作無法復原。`)) return;
+  google.script.run
+    .withSuccessHandler(() => {
+      showToast(`已刪除 ${customerName} 的全部訂單`, 'success');
+      activeCustomer = null;
+      document.getElementById('detailPanel').innerHTML =
+        '<div class="empty-state"><span class="empty-icon">👈</span><p>請選擇客人查看明細</p></div>';
+      refreshAll();
+    })
+    .withFailureHandler(err => showToast(err.message, 'error'))
+    .deleteCustomerAllOrders(customerName);
+}
+
+function doUndoPickup(customerName) {
+  if (!confirm(`確定要取消 ${customerName} 的取貨狀態？庫存將退回。`)) return;
+
+  google.script.run
+    .withSuccessHandler(() => {
+      showToast(`已取消 ${customerName} 的取貨`, 'success');
+      refreshAll();
+      loadDetail(customerName);
+    })
+    .withFailureHandler(err => showToast(err.message, 'error'))
+    .undoPickup(customerName);
+}
+
+// ════════════════════════════════════════════════════════
+// Stats
+// ════════════════════════════════════════════════════════
+function loadStats() {
+  google.script.run
+    .withSuccessHandler(s => {
+      document.getElementById('statTotal').textContent = s.total;
+      document.getElementById('statPicked').textContent = s.picked;
+      document.getElementById('statPending').textContent = s.pending;
+      document.getElementById('statRevenue').textContent = '$' + s.revenue.toLocaleString();
+    })
+    .withFailureHandler(() => {})
+    .getStats();
+}
+
+// ════════════════════════════════════════════════════════
+// Import Modal
+// ════════════════════════════════════════════════════════
+let currentTab = 'ocr';
+let manualOrders = [];
+
+function openImportModal() {
+  try {
+    resetModal();
+    document.getElementById('importModal').classList.remove('hidden');
+  } catch(e) {
+    showToast('開啟失敗：' + e.message, 'error');
+  }
+}
+
+function closeImportModal() {
+  document.getElementById('importModal').classList.add('hidden');
+}
+
+function resetModal() {
+  currentTab = 'ocr';
+  imageBase64 = null;
+  ocrOrders = [];
+  manualOrders = [];
+  document.getElementById('previewImg').classList.add('hidden');
+  document.getElementById('fileInput').value = '';
+  document.getElementById('ocrBody').innerHTML = '';
+  initWizard();
+  switchTab('ocr');
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('ocrTab').classList.toggle('hidden', tab !== 'ocr');
+  document.getElementById('manualTab').classList.toggle('hidden', tab !== 'manual');
+  document.getElementById('tabOcr').classList.toggle('active', tab === 'ocr');
+  document.getElementById('tabManual').classList.toggle('active', tab === 'manual');
+
+  const wzBtns = ['btnWzNext1','btnWzBack2','btnWzNext2','btnWzBack3','btnWzImport'];
+
+  if (tab === 'ocr') {
+    const atStep3 = !document.getElementById('step3').classList.contains('hidden');
+    document.getElementById('btnRecognize').classList.toggle('hidden', atStep3 || !imageBase64);
+    document.getElementById('btnImport').classList.toggle('hidden', !atStep3);
+    wzBtns.forEach(id => document.getElementById(id)?.classList.add('hidden'));
+  } else {
+    document.getElementById('btnRecognize').classList.add('hidden');
+    document.getElementById('btnImport').classList.add('hidden');
+    // wizard handles its own buttons via showWzStep
+    showWzStep(1);
+  }
+}
+
+function showStep(n) {
+  [1,2,3].forEach(i => {
+    document.getElementById('step'+i).classList.toggle('hidden', i !== n);
+  });
+  document.getElementById('btnRecognize').classList.toggle('hidden', n !== 1);
+  document.getElementById('btnImport').classList.toggle('hidden', n !== 3);
+}
+
+// ════════════════════════════════════════════════════════
+// Wizard Import
+// ════════════════════════════════════════════════════════
+let wzGroups = []; // [{groupName, singlePrice, variants:[{name,price}]}]
+let wzOrders = []; // final orders
+
+function initWizard() {
+  wzGroups = [{ groupName: '', singlePrice: '', variants: [] }];
+  wzOrders = [];
+  renderWzGroups();
+  showWzStep(1);
+}
+
+function showWzStep(n) {
+  ['wzStep1','wzStep2','wzStep3'].forEach((id, i) => {
+    document.getElementById(id).classList.toggle('hidden', i + 1 !== n);
+  });
+  // footer buttons
+  const ids = ['btnWzNext1','btnWzBack2','btnWzNext2','btnWzBack3','btnWzImport'];
+  const visible = {
+    1: ['btnWzNext1'],
+    2: ['btnWzBack2','btnWzNext2'],
+    3: ['btnWzBack3','btnWzImport']
+  };
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('hidden', !(visible[n]||[]).includes(id));
+  });
+}
+
+function renderWzGroups() {
+  document.getElementById('wzGroupList').innerHTML = wzGroups.map((g, gi) => {
+    const hasVariants = g.variants.length > 0;
+    const variantRows = g.variants.map((v, vi) => `
+      <div class="wz-variant-row">
+        <span class="wz-variant-label">規格名稱</span>
+        <input class="vname" value="${esc(v.name)}" placeholder="高麗菜水餃" oninput="wzGroups[${gi}].variants[${vi}].name=this.value" />
+        <span class="wz-variant-label">$</span>
+        <input class="vprice" type="number" value="${v.price}" placeholder="0" oninput="wzGroups[${gi}].variants[${vi}].price=+this.value" />
+        <button class="del-btn" onclick="removeWzVariant(${gi},${vi})">✕</button>
+      </div>`).join('');
+
+    return `
+      <div class="wz-group">
+        <div class="wz-group-header">
+          <label>品項名稱（儀表板顯示）</label>
+          <input class="name-input" value="${esc(g.groupName)}" placeholder="水餃" oninput="wzGroups[${gi}].groupName=this.value" />
+          ${wzGroups.length > 1 ? `<button class="del-btn" onclick="removeWzGroup(${gi})">✕</button>` : ''}
+        </div>
+        <div class="wz-group-header" style="margin-bottom:0;">
+          <label>單一價格 $</label>
+          <input class="price-input" type="number" value="${g.singlePrice}" placeholder="0（有多規格時留空）"
+            oninput="wzGroups[${gi}].singlePrice=this.value"
+            style="width:160px;" ${hasVariants ? 'disabled' : ''} />
+        </div>
+        ${hasVariants ? `<div style="margin-top:10px;">${variantRows}</div>` : ''}
+        <button class="btn" style="margin-top:8px;font-size:12px;background:var(--primary-light);color:var(--primary);"
+          onclick="addWzVariant(${gi})">＋ 新增規格（不同口味/價格）</button>
+      </div>`;
+  }).join('');
+}
+
+function addWzGroup() {
+  wzGroups.push({ groupName: '', singlePrice: '', variants: [] });
+  renderWzGroups();
+}
+
+function removeWzGroup(gi) {
+  wzGroups.splice(gi, 1);
+  renderWzGroups();
+}
+
+function addWzVariant(gi) {
+  wzGroups[gi].variants.push({ name: '', price: '' });
+  renderWzGroups();
+}
+
+function removeWzVariant(gi, vi) {
+  wzGroups[gi].variants.splice(vi, 1);
+  renderWzGroups();
+}
+
+function wzGoStep1() { showWzStep(1); }
+
+function wzGoStep2() {
+  // 驗證
+  for (const g of wzGroups) {
+    if (!g.groupName.trim()) { showToast('請填寫品項名稱', 'error'); return; }
+  }
+  // 渲染訂單輸入區
+  const container = document.getElementById('wzOrderInputs');
+  container.innerHTML = wzGroups.map((g, gi) => {
+    const items = g.variants.length > 0 ? g.variants : [{ name: g.groupName, price: g.singlePrice }];
+    return items.map((v, vi) => {
+      const label = g.variants.length > 0 ? `${g.groupName} — ${v.name}` : g.groupName;
+      const price = v.price || g.singlePrice || '';
+      return `
+        <div class="wz-order-block">
+          <h4>${label} <span class="wz-price-tag">$${price || '?'}</span></h4>
+          <textarea class="paste-area" id="wzInput_${gi}_${vi}" style="min-height:100px;"
+            placeholder="每行一位客人，例如：\n小明 3\n小美 2\n王大明（省略數量預設為 1）"></textarea>
+        </div>`;
+    }).join('');
+  }).join('');
+  showWzStep(2);
+}
+
+function wzGoStep3() {
+  wzOrders = [];
+  wzGroups.forEach((g, gi) => {
+    const items = g.variants.length > 0 ? g.variants : [{ name: g.groupName, price: g.singlePrice }];
+    items.forEach((v, vi) => {
+      const text = (document.getElementById(`wzInput_${gi}_${vi}`)?.value || '').trim();
+      if (!text) return;
+      const productName = g.variants.length > 0 ? v.name : g.groupName;
+      const groupName = g.variants.length > 0 ? g.groupName : '';
+      const price = parseFloat(v.price || g.singlePrice) || 0;
+      text.split('\n').forEach(line => {
+        line = line.trim();
+        if (!line) return;
+        const m = line.match(/^(.+?)\s*[x×xX]\s*(\d+)\s*$/) || line.match(/^(.+?)\s+(\d+)\s*$/);
+        const customer = m ? m[1].trim() : line;
+        const qty = m ? parseInt(m[2]) : 1;
+        if (customer) wzOrders.push({ customer, product: productName, qty, price, group: groupName });
+      });
+    });
+  });
+
+  if (wzOrders.length === 0) { showToast('請至少輸入一位客人', 'error'); return; }
+
+  // 渲染預覽
+  const customers = new Set(wzOrders.map(o => o.customer));
+  document.getElementById('wzSummary').textContent =
+    `共 ${customers.size} 位客人，${wzOrders.length} 筆訂單`;
+
+  document.getElementById('wzPreviewBody').innerHTML = wzOrders.map((o, i) => `
+    <tr>
+      <td><input value="${esc(o.customer)}" onchange="wzOrders[${i}].customer=this.value" /></td>
+      <td>${esc(o.product)}</td>
+      <td><input type="number" value="${o.qty}" min="1" style="width:60px;" onchange="wzOrders[${i}].qty=+this.value" /></td>
+      <td>$${o.price}</td>
+      <td><button class="del-btn" onclick="wzOrders.splice(${i},1);wzGoStep3PreviewOnly()">✕</button></td>
+    </tr>`).join('');
+
+  showWzStep(3);
+}
+
+function wzGoStep3PreviewOnly() {
+  document.getElementById('wzPreviewBody').innerHTML = wzOrders.map((o, i) => `
+    <tr>
+      <td><input value="${esc(o.customer)}" onchange="wzOrders[${i}].customer=this.value" /></td>
+      <td>${esc(o.product)}</td>
+      <td><input type="number" value="${o.qty}" min="1" style="width:60px;" onchange="wzOrders[${i}].qty=+this.value" /></td>
+      <td>$${o.price}</td>
+      <td><button class="del-btn" onclick="wzOrders.splice(${i},1);wzGoStep3PreviewOnly()">✕</button></td>
+    </tr>`).join('');
+}
+
+// Drag & Drop
+function handleDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
+function handleDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+function handleDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) processFile(file);
+}
+
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) processFile(file);
+}
+
+function processFile(file) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const dataUrl = ev.target.result;
+    imageBase64 = dataUrl.split(',')[1];
+
+    const img = document.getElementById('previewImg');
+    img.src = dataUrl;
+    img.classList.remove('hidden');
+    document.getElementById('btnRecognize').classList.remove('hidden');
+  };
+  reader.readAsDataURL(file);
+}
+
+// OCR
+function runOCR() {
+  if (!imageBase64) { showToast('請先選擇圖片', 'error'); return; }
+  showStep(2);
+
+  google.script.run
+    .withSuccessHandler(result => {
+      // 把 group 資訊從 suggestedProducts 對應到每筆訂單
+      const variantGroupMap = {};
+      (result.suggestedProducts || []).forEach(g => {
+        if (g.variants.length > 0) {
+          g.variants.forEach(v => { if (v.name) variantGroupMap[v.name] = g.groupName; });
+        } else if (g.groupName) {
+          variantGroupMap[g.groupName] = '';
+        }
+      });
+      ocrOrders = (result.orders || []).map(o => ({
+        ...o,
+        group: variantGroupMap[o.product] || ''
+      }));
+      renderOcrStep(result);
+      showStep(3);
+    })
+    .withFailureHandler(err => {
+      showToast('辨識失敗：' + err.message, 'error');
+      showStep(1);
+    })
+    .parseLineScreenshot(imageBase64);
+}
+
+let ocrSuggestedProducts = []; // AI 建議的品項結構
+
+function renderOcrStep(result) {
+  document.getElementById('ocrSummary').textContent = result.summary || `辨識到 ${result.orders?.length || 0} 筆訂單`;
+
+  // 品項建議
+  ocrSuggestedProducts = result.suggestedProducts || [];
+  const section = document.getElementById('ocrProductSection');
+  if (ocrSuggestedProducts.length > 0) {
+    section.classList.remove('hidden');
+    renderOcrProductBlocks();
+  } else {
+    section.classList.add('hidden');
+  }
+
+  renderOcrTable();
+}
+
+function renderOcrProductBlocks() {
+  document.getElementById('ocrProductBlocks').innerHTML = ocrSuggestedProducts.map((g, gi) => {
+    const variantRows = g.variants.map((v, vi) => `
+      <div class="wz-variant-row">
+        <span class="wz-variant-label">規格</span>
+        <input class="vname" value="${esc(v.name)}" oninput="ocrSuggestedProducts[${gi}].variants[${vi}].name=this.value" />
+        <span class="wz-variant-label">$</span>
+        <input class="vprice" type="number" value="${v.price||''}" oninput="ocrSuggestedProducts[${gi}].variants[${vi}].price=+this.value" />
+        <button class="del-btn" onclick="ocrSuggestedProducts[${gi}].variants.splice(${vi},1);renderOcrProductBlocks()">✕</button>
+      </div>`).join('');
+    const noVariants = g.variants.length === 0;
+    return `
+      <div class="wz-group" style="margin-bottom:8px;">
+        <div class="wz-group-header">
+          <label>品項名稱</label>
+          <input class="name-input" value="${esc(g.groupName)}" oninput="ocrSuggestedProducts[${gi}].groupName=this.value" />
+          ${noVariants ? `<label style="margin-left:8px;">$</label>
+          <input type="number" value="${g.singlePrice||''}" style="width:80px;"
+            oninput="ocrSuggestedProducts[${gi}].singlePrice=+this.value" />` : ''}
+        </div>
+        ${variantRows}
+        <button class="btn" style="margin-top:6px;font-size:12px;background:var(--primary-light);color:var(--primary);"
+          onclick="ocrSuggestedProducts[${gi}].variants.push({name:'',price:0});renderOcrProductBlocks()">＋ 新增規格</button>
+      </div>`;
+  }).join('');
+}
+
+function renderOcrTable() {
+  const tbody = document.getElementById('ocrBody');
+  tbody.innerHTML = ocrOrders.map((o, i) => `
+    <tr>
+      <td><input value="${esc(o.customer)}" onchange="ocrOrders[${i}].customer=this.value" /></td>
+      <td><input value="${esc(o.product)}" onchange="ocrOrders[${i}].product=this.value" /></td>
+      <td><input type="number" value="${o.qty}" min="1" style="width:60px;" onchange="ocrOrders[${i}].qty=+this.value" /></td>
+      <td>$<input type="number" value="${o.price||0}" min="0" style="width:65px;" onchange="ocrOrders[${i}].price=+this.value" /></td>
+      <td><button class="del-btn" onclick="removeOcrRow(${i})">✕</button></td>
+    </tr>`).join('');
+}
+
+function addOcrRow() {
+  ocrOrders.push({ customer: '', product: '', qty: 1, price: 0 });
+  renderOcrTable();
+}
+
+function removeOcrRow(i) {
+  ocrOrders.splice(i, 1);
+  renderOcrTable();
+}
+
+function confirmImport(clearFirst, mode) {
+  try {
+  mode = mode || currentTab;
+
+  let orders;
+  if (mode === 'wizard') {
+    // 從 DOM 取最新值
+    const rows = document.querySelectorAll('#wzPreviewBody tr');
+    orders = Array.from(rows).map((tr, i) => {
+      const inputs = tr.querySelectorAll('input');
+      return {
+        customer: inputs[0].value.trim(),
+        product: wzOrders[i]?.product || '',
+        qty: parseInt(inputs[1].value) || 1,
+        price: wzOrders[i]?.price || 0,
+        group: wzOrders[i]?.group || ''
+      };
+    }).filter(o => o.customer && o.product && o.qty > 0);
+  } else if (mode === 'manual') {
+    orders = manualOrders.filter(o => o.customer && o.product && o.qty > 0);
+  } else {
+    // OCR 模式：orders 已含 price（從表格 input 取最新值）
+    const rows = document.querySelectorAll('#ocrBody tr');
+    orders = Array.from(rows).map((tr, i) => {
+      const inputs = tr.querySelectorAll('input');
+      return {
+        customer: inputs[0].value.trim(),
+        product:  inputs[1].value.trim(),
+        qty:      parseInt(inputs[2].value) || 1,
+        price:    parseFloat(inputs[3].value) || ocrOrders[i]?.price || 0,
+        group:    ocrOrders[i]?.group || ''
+      };
+    }).filter(o => o.customer && o.product && o.qty > 0);
+  }
+
+  if (orders.length === 0) { showToast('沒有可匯入的訂單，請補齊資料', 'error'); return; }
+
+  const btnId = mode === 'wizard' ? 'btnWzImport' : mode === 'manual' ? 'btnManualImport' : 'btnImport';
+
+  const doImport = () => {
+    const btn = document.getElementById(btnId);
+    btn.disabled = true;
+    btn.textContent = '匯入中…';
+
+    // 收集品項結構（OCR 模式用 ocrSuggestedProducts，wizard 模式用 wzGroups）
+    let productDefs = [];
+    if (mode === 'ocr' && ocrSuggestedProducts.length > 0) {
+      ocrSuggestedProducts.forEach(g => {
+        if (g.variants.length > 0) {
+          g.variants.forEach(v => {
+            if (v.name) productDefs.push({ name: v.name, price: v.price || 0, type: '規格', note: g.groupName });
+          });
+        } else if (g.groupName) {
+          productDefs.push({ name: g.groupName, price: g.singlePrice || 0, type: '一般', note: '' });
+        }
+      });
+    } else if (mode === 'wizard') {
+      wzGroups.forEach(g => {
+        if (g.variants.length > 0) {
+          g.variants.forEach(v => {
+            if (v.name) productDefs.push({ name: v.name, price: v.price || 0, type: '規格', note: g.groupName });
+          });
+        } else if (g.groupName) {
+          productDefs.push({ name: g.groupName, price: parseFloat(g.singlePrice) || 0, type: '一般', note: '' });
+        }
+      });
+    }
+
+    const runImport = () => {
+      google.script.run
+        .withSuccessHandler(r => {
+          showToast(`✅ 成功匯入 ${r.count} 筆訂單！`, 'success');
+          closeImportModal();
+          refreshAll();
+        })
+        .withFailureHandler(err => {
+          showToast('匯入失敗：' + err.message, 'error');
+          btn.disabled = false;
+          btn.textContent = '✅ 確認匯入';
+        })
+        .importOrders(orders);
+    };
+
+    if (productDefs.length > 0) {
+      google.script.run
+        .withSuccessHandler(runImport)
+        .withFailureHandler(runImport) // 即使儲存品項失敗也繼續匯入
+        .batchSaveProducts(productDefs);
+    } else {
+      runImport();
+    }
+  };
+
+  if (clearFirst) {
+    google.script.run
+      .withSuccessHandler(doImport)
+      .withFailureHandler(err => showToast(err.message, 'error'))
+      .clearAllData();
+  } else {
+    doImport();
+  }
+  } catch(e) { showToast('錯誤：' + e.message, 'error'); }
+}
+
+function confirmClear(mode) {
+  if (confirm('⚠️ 這會清除所有舊訂單與庫存，然後重新匯入。確定嗎？')) {
+    confirmImport(true, mode);
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// Product Management Modal
+// ════════════════════════════════════════════════════════
+let prodRows = [];
+
+function openProductModal() {
+  document.getElementById('productModal').classList.remove('hidden');
+  document.getElementById('prodMgmtBody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;"><div class="spinner" style="margin:auto;"></div></td></tr>';
+
+  google.script.run
+    .withSuccessHandler(data => {
+      prodRows = data.map(p => ({ ...p }));
+      if (prodRows.length === 0) prodRows.push({ name: '', price: '', type: '一般', note: '' });
+      renderProdTable();
+    })
+    .withFailureHandler(err => showToast(err.message, 'error'))
+    .getProductsForManagement();
+}
+
+function closeProductModal() {
+  document.getElementById('productModal').classList.add('hidden');
+}
+
+function renderProdTable() {
+  const tbody = document.getElementById('prodMgmtBody');
+  tbody.innerHTML = prodRows.map((p, i) => `
+    <tr>
+      <td><input value="${esc(p.name)}" placeholder="商品名稱" onchange="prodRows[${i}].name=this.value" /></td>
+      <td><input type="number" value="${p.price}" placeholder="0" min="0" onchange="prodRows[${i}].price=+this.value" /></td>
+      <td>
+        <select onchange="prodRows[${i}].type=this.value">
+          <option value="一般" ${p.type==='一般'?'selected':''}>一般</option>
+          <option value="規格" ${p.type==='規格'?'selected':''}>規格</option>
+          <option value="組合" ${p.type==='組合'?'selected':''}>組合</option>
+        </select>
+      </td>
+      <td><input value="${esc(p.note||'')}" placeholder="備註" onchange="prodRows[${i}].note=this.value" /></td>
+      <td><button class="del-btn" onclick="removeProdRow(${i})">✕</button></td>
+    </tr>`).join('');
+}
+
+function addProdRow() {
+  prodRows.push({ name: '', price: '', type: '一般', note: '' });
+  renderProdTable();
+  setTimeout(() => {
+    const rows = document.querySelectorAll('#prodMgmtBody tr');
+    if (rows.length) rows[rows.length-1].querySelector('input')?.focus();
+  }, 50);
+}
+
+function removeProdRow(i) {
+  prodRows.splice(i, 1);
+  if (prodRows.length === 0) prodRows.push({ name: '', price: '', type: '一般', note: '' });
+  renderProdTable();
+}
+
+function saveAllProducts() {
+  // 從 DOM 取最新值
+  const rows = document.querySelectorAll('#prodMgmtBody tr');
+  const toSave = Array.from(rows).map(tr => {
+    const inputs = tr.querySelectorAll('input');
+    const sel = tr.querySelector('select');
+    return {
+      name: inputs[0].value.trim(),
+      price: parseFloat(inputs[1].value) || 0,
+      type: sel ? sel.value : '一般',
+      note: inputs[2].value.trim()
+    };
+  }).filter(p => p.name);
+
+  if (toSave.length === 0) { showToast('請至少填一個商品名稱', 'error'); return; }
+
+  const btn = document.querySelector('#productModal .btn-success');
+  btn.disabled = true; btn.textContent = '儲存中…';
+
+  google.script.run
+    .withSuccessHandler(r => {
+      showToast(`✅ 已儲存 ${r.count} 個商品`, 'success');
+      btn.disabled = false; btn.textContent = '💾 儲存全部';
+      closeProductModal();
+      loadProducts();
+    })
+    .withFailureHandler(err => {
+      showToast('儲存失敗：' + err.message, 'error');
+      btn.disabled = false; btn.textContent = '💾 儲存全部';
+    })
+    .batchSaveProducts(toSave);
+}
+
+// ════════════════════════════════════════════════════════
+// Utils
+// ════════════════════════════════════════════════════════
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + type;
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.className = '', 3000);
+}
+
+function esc(s) {
+  return String(s).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+function p2id(p) {
+  return p.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, '_');
+}
+</script>
+</body>
+</html>
