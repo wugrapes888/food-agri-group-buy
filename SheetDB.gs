@@ -417,8 +417,26 @@ const SheetDB = (() => {
     return { success: true, count: products.length };
   }
 
+  function getAllCustomers() {
+    const sheet = getSheet(SHEET.ORDERS);
+    const data = sheet.getDataRange().getValues();
+    if (data.length <= 1) return [];
+
+    const map = {};
+    data.slice(1).forEach(r => {
+      if (!r[0]) return;
+      const name = r[0];
+      if (!map[name]) map[name] = { name, qty: 0, status: '已取貨' };
+      map[name].qty += Number(r[2]);
+      if (r[5] !== '已取貨') map[name].status = '未取貨';
+    });
+
+    return Object.values(map).sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'));
+  }
+
   return {
     getProducts,
+    getAllCustomers,
     getBuyersByProduct,
     getCustomerDetail,
     completePickup,

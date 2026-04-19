@@ -19,6 +19,10 @@ function getProducts() {
   return SheetDB.getProducts();
 }
 
+function getAllCustomers() {
+  return SheetDB.getAllCustomers();
+}
+
 function getBuyersByProduct(productName) {
   return SheetDB.getBuyersByProduct(productName);
 }
