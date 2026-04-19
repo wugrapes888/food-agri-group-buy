@@ -23,6 +23,10 @@ function getAllCustomers() {
   return SheetDB.getAllCustomers();
 }
 
+function getOrderSummary() {
+  return SheetDB.getOrderSummary();
+}
+
 function getBuyersByProduct(productName) {
   return SheetDB.getBuyersByProduct(productName);
 }

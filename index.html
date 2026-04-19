@@ -581,9 +581,10 @@
     <div class="stat-chip" onclick="showByStatus('all')" style="cursor:pointer;" title="顯示全部客人">客人 <strong id="statTotal">–</strong></div>
     <div class="stat-chip stat-chip-click" onclick="showByStatus('picked')" style="cursor:pointer;" title="顯示已取貨客人">✅ 已取 <strong id="statPicked">–</strong></div>
     <div class="stat-chip stat-chip-click" onclick="showByStatus('pending')" style="cursor:pointer;" title="顯示待取貨客人">⏳ 待取 <strong id="statPending">–</strong></div>
-    <div class="stat-chip">💰 <strong id="statRevenue">–</strong></div>
   </div>
   <div class="header-actions">
+    <button class="btn btn-ghost" onclick="openOrderSummary()">📦 下單彙整</button>
+    <button class="btn btn-success" onclick="openQuickAdd()" style="font-weight:700;">＋ 新增訂單</button>
     <button class="btn btn-ghost" onclick="openProductModal()">⚙️ 商品設定</button>
     <button class="btn btn-ghost" onclick="openImportModal()">📋 匯入訂單</button>
     <button class="btn btn-white" onclick="refreshAll()">↺ 重整</button>
@@ -754,8 +755,8 @@
         <!-- CSV Step 3: 預覽 -->
         <div id="csvStep3" class="hidden">
           <p id="csvSummary" style="font-size:13px;color:var(--text-muted);margin-bottom:12px;"></p>
-          <table class="ocr-table">
-            <thead><tr><th>客人</th><th>品項</th><th>數量</th><th>單價</th></tr></thead>
+          <table class="ocr-table" id="csvPreviewTable">
+            <thead id="csvPreviewHead"></thead>
             <tbody id="csvPreviewBody"></tbody>
           </table>
           <div class="danger-zone">
@@ -780,6 +781,46 @@
       <button class="btn btn-primary hidden" id="btnCsvNext2" onclick="csvGoStep3()">預覽 →</button>
       <button class="btn" style="background:var(--bg);color:var(--text);" id="btnCsvBack3" onclick="csvGoStep2()" class="hidden">← 修改</button>
       <button class="btn btn-success hidden" id="btnCsvImport" onclick="confirmImport(false, 'csv')">✅ 確認匯入</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Quick Add Order Modal ── -->
+<div class="modal-backdrop hidden" id="quickAddModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <span class="modal-title">＋ 新增訂單</span>
+      <button class="modal-close" onclick="closeQuickAdd()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:14px;">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">客人姓名</label>
+        <input id="qaName" type="text" placeholder="輸入客人姓名" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:8px 12px;font-size:14px;">
+      </div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px;">選擇商品與數量</div>
+      <div id="qaRows"></div>
+      <button class="btn btn-primary" style="margin-top:10px;width:100%;justify-content:center;" onclick="addQaRow()">＋ 再加一項</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" style="background:var(--bg);color:var(--text);" onclick="closeQuickAdd()">取消</button>
+      <button class="btn btn-success" id="btnQaSubmit" onclick="submitQuickAdd()">✅ 新增</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Order Summary Modal ── -->
+<div class="modal-backdrop hidden" id="summaryModal">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <span class="modal-title">📦 下單彙整</span>
+      <button class="modal-close" onclick="document.getElementById('summaryModal').classList.add('hidden')">✕</button>
+    </div>
+    <div class="modal-body" id="summaryBody" style="max-height:70vh;overflow-y:auto;">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" style="background:var(--bg);color:var(--text);" onclick="document.getElementById('summaryModal').classList.add('hidden')">關閉</button>
+      <button class="btn btn-primary" onclick="copySummary()">📋 複製文字</button>
     </div>
   </div>
 </div>
@@ -1069,6 +1110,174 @@ function doUndoPickup(customerName) {
     })
     .withFailureHandler(err => showToast(err.message, 'error'))
     .undoPickup(customerName);
+}
+
+// ════════════════════════════════════════════════════════
+// Quick Add Order
+// ════════════════════════════════════════════════════════
+let qaProductList = []; // [{name, price, group}]
+
+function openQuickAdd() {
+  document.getElementById('quickAddModal').classList.remove('hidden');
+  document.getElementById('qaName').value = '';
+  document.getElementById('qaRows').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const btn = document.getElementById('btnQaSubmit');
+  btn.disabled = false;
+  btn.textContent = '✅ 新增';
+
+  qaItems = [];
+  google.script.run
+    .withSuccessHandler(data => {
+      qaProductList = data;
+      renderQaRows([{ product: '', qty: 1 }]);
+    })
+    .withFailureHandler(err => showToast(err.message, 'error'))
+    .getProductsForManagement();
+}
+
+function closeQuickAdd() {
+  document.getElementById('quickAddModal').classList.add('hidden');
+}
+
+let qaItems = [];
+
+function renderQaRows(items) {
+  qaItems = items;
+  const options = qaProductList.map(p =>
+    `<option value="${p.name}">${p.name}${p.note ? ' (' + p.note + ')' : ''}</option>`
+  ).join('');
+
+  document.getElementById('qaRows').innerHTML = qaItems.map((item, i) => `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;" id="qaRow_${i}">
+      <select style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:7px 10px;font-size:14px;" onchange="setQaProduct(${i},this.value)">
+        <option value="">選擇商品…</option>
+        ${options}
+      </select>
+      <input type="number" min="1" value="${item.qty}" style="width:70px;border:1.5px solid var(--border);border-radius:8px;padding:7px;font-size:14px;text-align:center;" oninput="setQaQty(${i},this.value)">
+      ${qaItems.length > 1 ? `<button onclick="removeQaRow(${i})" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-muted);">✕</button>` : '<span style="width:24px;"></span>'}
+    </div>`).join('');
+
+  qaItems.forEach((item, i) => {
+    if (item.product) {
+      const sel = document.querySelector(`#qaRow_${i} select`);
+      if (sel) sel.value = item.product;
+    }
+  });
+}
+
+function setQaProduct(i, val) { if (qaItems[i]) qaItems[i].product = val; }
+function setQaQty(i, val) { if (qaItems[i]) qaItems[i].qty = parseInt(val) || 1; }
+
+function addQaRow() {
+  qaItems.push({ product: '', qty: 1 });
+  renderQaRows(qaItems);
+}
+
+function removeQaRow(i) {
+  qaItems.splice(i, 1);
+  renderQaRows(qaItems);
+}
+
+function submitQuickAdd() {
+  const name = document.getElementById('qaName').value.trim();
+  if (!name) { showToast('請輸入客人姓名', 'error'); return; }
+
+  const orders = qaItems
+    .filter(item => item.product && item.qty > 0)
+    .map(item => {
+      const p = qaProductList.find(p => p.name === item.product);
+      return { customer: name, product: item.product, qty: item.qty, price: p ? p.price : 0, group: p ? p.note : '' };
+    });
+
+  if (orders.length === 0) { showToast('請選擇至少一項商品', 'error'); return; }
+
+  const btn = document.getElementById('btnQaSubmit');
+  btn.disabled = true;
+  btn.textContent = '新增中…';
+
+  google.script.run
+    .withSuccessHandler(r => {
+      showToast(`✅ 已新增 ${name} 的 ${r.count} 筆訂單`, 'success');
+      closeQuickAdd();
+      refreshAll();
+    })
+    .withFailureHandler(err => {
+      showToast('新增失敗：' + err.message, 'error');
+      btn.disabled = false;
+      btn.textContent = '✅ 新增';
+    })
+    .importOrders(orders);
+}
+
+// ════════════════════════════════════════════════════════
+// Order Summary
+// ════════════════════════════════════════════════════════
+function openOrderSummary() {
+  document.getElementById('summaryModal').classList.remove('hidden');
+  document.getElementById('summaryBody').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+  google.script.run
+    .withSuccessHandler(renderSummary)
+    .withFailureHandler(err => {
+      document.getElementById('summaryBody').innerHTML = '<p style="color:red;padding:20px;">' + err.message + '</p>';
+    })
+    .getOrderSummary();
+}
+
+function renderSummary(data) {
+  const sections = [];
+
+  data.groups.forEach(g => {
+    sections.push(`
+      <div style="margin-bottom:20px;">
+        <div style="font-size:15px;font-weight:700;padding:8px 12px;background:var(--primary-light);border-radius:8px;display:flex;justify-content:space-between;">
+          <span>${g.groupName}</span>
+          <span style="color:var(--primary);">合計 ${g.total} 份</span>
+        </div>
+        ${g.variants.map((v, i, arr) => `
+          <div style="display:flex;justify-content:space-between;padding:7px 16px;border-bottom:1px solid var(--border);font-size:14px;">
+            <span style="color:var(--text-muted);">${i === arr.length-1 ? '└' : '├'} ${v.name}</span>
+            <strong>${v.qty} 份</strong>
+          </div>`).join('')}
+      </div>`);
+  });
+
+  data.standalone.forEach(p => {
+    sections.push(`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;margin-bottom:8px;background:var(--primary-light);border-radius:8px;font-size:14px;">
+        <span style="font-weight:600;">${p.name}</span>
+        <strong>${p.qty} 份</strong>
+      </div>`);
+  });
+
+  if (sections.length === 0) {
+    document.getElementById('summaryBody').innerHTML = '<div class="empty-state" style="padding:40px;"><p>目前沒有訂單資料</p></div>';
+    return;
+  }
+
+  document.getElementById('summaryBody').innerHTML = sections.join('');
+}
+
+function copySummary() {
+  const lines = [];
+  document.querySelectorAll('#summaryBody > div').forEach(block => {
+    const title = block.querySelector('[style*="font-weight:700"]');
+    if (title) {
+      const spans = title.querySelectorAll('span');
+      lines.push(spans[0]?.textContent.trim() + '　' + (spans[1]?.textContent.trim() || ''));
+      block.querySelectorAll('[style*="border-bottom"]').forEach(row => {
+        const cells = row.querySelectorAll('span, strong');
+        if (cells.length >= 2) lines.push('  ' + cells[0].textContent.trim() + '　' + cells[1].textContent.trim());
+      });
+    } else {
+      const name = block.querySelector('[style*="font-weight:600"]');
+      const qty = block.querySelector('strong');
+      if (name && qty) lines.push(name.textContent.trim() + '　' + qty.textContent.trim());
+    }
+  });
+  navigator.clipboard.writeText(lines.join('\n'))
+    .then(() => showToast('已複製到剪貼簿', 'success'))
+    .catch(() => showToast('複製失敗，請手動選取', 'error'));
 }
 
 // ════════════════════════════════════════════════════════
@@ -1601,34 +1810,42 @@ function showCsvStep(n) {
   });
 }
 
+function parseTableLines(raw) {
+  const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+  // 偵測是否為 Markdown 表格（行以 | 開頭或結尾）
+  if (lines[0].startsWith('|') || lines[0].endsWith('|')) {
+    const dataLines = lines.filter(l => !/^\|[\s|:\-]+\|$/.test(l)); // 去掉分隔列 |:---:|
+    return dataLines.map(l => l.replace(/^\||\|$/g, '').split('|').map(c => c.trim()));
+  }
+
+  // 自動偵測 tab / 逗號 / 分號
+  const candidates = ['\t', ',', ';'];
+  let sep = '\t', maxCols = 0;
+  candidates.forEach(c => { const n = lines[0].split(c).length; if (n > maxCols) { maxCols = n; sep = c; } });
+  return lines.map(l => l.split(sep).map(c => c.trim()));
+}
+
 function csvGoStep2() {
   const raw = document.getElementById('csvInput').value.trim();
   if (!raw) { showToast('請先貼上表格資料', 'error'); return; }
 
-  const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  if (lines.length < 2) { showToast('至少需要標題列和一行資料', 'error'); return; }
+  const rows = parseTableLines(raw);
+  if (rows.length < 2) { showToast('至少需要標題列和一行資料', 'error'); return; }
 
-  // 自動偵測分隔符號（選分出最多欄位的那個）
-  const candidates = ['\t', ',', ';'];
-  let sep = '\t';
-  let maxCols = 0;
-  candidates.forEach(c => {
-    const count = lines[0].split(c).length;
-    if (count > maxCols) { maxCols = count; sep = c; }
-  });
-
-  const headers = lines[0].split(sep).map(h => h.trim());
+  const headers = rows[0];
 
   // 第一欄是客人名，最後欄若含「總計」「小計」「合計」則忽略
   const skipLast = /總計|小計|合計/.test(headers[headers.length - 1]);
   const colHeaders = headers.slice(1, skipLast ? headers.length - 1 : undefined);
 
   if (colHeaders.length === 0) {
-    showToast(`找不到品項欄位。偵測到 ${maxCols} 欄，請確認第一行是標題列`, 'error');
+    showToast(`找不到品項欄位，請確認第一行是標題列（偵測到 ${headers.length} 欄）`, 'error');
     return;
   }
 
   csvParsedCols = colHeaders.map(name => ({ name, price: 0 }));
+  document.getElementById('csvInput').dataset.rows = JSON.stringify(rows);
 
   // 渲染價格設定
   const container = document.getElementById('csvPriceInputs');
@@ -1644,18 +1861,14 @@ function csvGoStep2() {
 
 function csvGoStep3() {
   const raw = document.getElementById('csvInput').value.trim();
-  const candidates = ['\t', ',', ';'];
-  let sep = '\t', maxCols = 0;
-  const firstLine = raw.split(/\r?\n/)[0] || '';
-  candidates.forEach(c => { const n = firstLine.split(c).length; if (n > maxCols) { maxCols = n; sep = c; } });
-  const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  const headers = lines[0].split(sep).map(h => h.trim());
+  const cachedRows = document.getElementById('csvInput').dataset.rows;
+  const rows = cachedRows ? JSON.parse(cachedRows) : parseTableLines(raw);
+  const headers = rows[0];
   const skipLast = /總計|小計|合計/.test(headers[headers.length - 1]);
   const colCount = csvParsedCols.length;
 
   csvOrders = [];
-  lines.slice(1).forEach(line => {
-    const cells = line.split(sep).map(c => c.trim());
+  rows.slice(1).forEach(cells => {
     const customer = cells[0];
     if (!customer) return;
     for (let i = 0; i < colCount; i++) {
@@ -1674,17 +1887,37 @@ function csvGoStep3() {
 
   if (csvOrders.length === 0) { showToast('沒有找到任何訂單資料', 'error'); return; }
 
-  const customers = new Set(csvOrders.map(o => o.customer)).size;
-  document.getElementById('csvSummary').textContent = `共 ${customers} 位客人，${csvOrders.length} 筆訂單`;
+  const customerCount = new Set(csvOrders.map(o => o.customer)).size;
+  document.getElementById('csvSummary').textContent = `共 ${customerCount} 位客人，${csvOrders.length} 筆訂單`;
+
+  // 表頭：姓名 + 各品項欄
+  const thead = document.getElementById('csvPreviewHead');
+  thead.innerHTML = '<tr><th>客人姓名</th>' + csvParsedCols.map(c => `<th>${c.name}</th>`).join('') + '<th>小計</th></tr>';
+
+  // 每位客人一行，按原始表格順序
+  const rowOrder = [];
+  const rowMap = {};
+  rows.slice(1).forEach(cells => {
+    const customer = cells[0];
+    if (!customer) return;
+    if (!rowMap[customer]) { rowMap[customer] = {}; rowOrder.push(customer); }
+    for (let i = 0; i < colCount; i++) {
+      const qty = parseInt(cells[i + 1]) || 0;
+      if (qty > 0) rowMap[customer][csvParsedCols[i].name] = (rowMap[customer][csvParsedCols[i].name] || 0) + qty;
+    }
+  });
 
   const tbody = document.getElementById('csvPreviewBody');
-  tbody.innerHTML = csvOrders.map(o => `
-    <tr>
-      <td>${o.customer}</td>
-      <td>${o.product}</td>
-      <td>${o.qty}</td>
-      <td>${o.price ? '$' + o.price : '–'}</td>
-    </tr>`).join('');
+  tbody.innerHTML = rowOrder.map(customer => {
+    const total = csvParsedCols.reduce((s, c) => s + (rowMap[customer][c.name] || 0), 0);
+    return '<tr><td><strong>' + customer + '</strong></td>'
+      + csvParsedCols.map(c => {
+          const q = rowMap[customer][c.name] || 0;
+          const style = q > 0 ? 'text-align:center;font-weight:600;color:var(--primary);' : 'text-align:center;color:var(--text-muted);';
+          return `<td style="${style}">${q > 0 ? q : '–'}</td>`;
+        }).join('')
+      + `<td style="text-align:center;font-weight:700;">${total}</td></tr>`;
+  }).join('');
 
   showCsvStep(3);
 }

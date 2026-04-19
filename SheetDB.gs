@@ -17,6 +17,20 @@ const SheetDB = (() => {
     if (!sheet) {
       sheet = ss().insertSheet(name);
       _initHeaders(sheet, name);
+    } else {
+      // 確保標題列存在（第一欄不是預期的標題時補上）
+      const firstCell = sheet.getRange(1, 1).getValue();
+      const needsHeader = (name === SHEET.ORDERS && firstCell !== '客人姓名')
+                       || (name === SHEET.PRODUCTS && firstCell !== '商品名稱');
+      if (needsHeader) {
+        sheet.insertRowBefore(1);
+        if (name === SHEET.ORDERS) {
+          sheet.getRange(1, 1, 1, 7).setValues([['客人姓名','商品名稱','數量','單價','小計','取貨狀態','建立時間']]);
+        } else {
+          sheet.getRange(1, 1, 1, 6).setValues([['商品名稱','單價','總訂購量','剩餘待取量','類型','備註']]);
+        }
+        sheet.setFrozenRows(1);
+      }
     }
     return sheet;
   }
@@ -83,16 +97,16 @@ const SheetDB = (() => {
     if (data.length <= 1) return [];
 
     const map = {};
+    const order = [];
     data.slice(1).forEach(r => {
       if (!matchProducts.has(r[1])) return;
       const name = r[0];
-      if (!map[name]) map[name] = { name, qty: 0, status: r[5] };
+      if (!map[name]) { map[name] = { name, qty: 0, status: r[5] }; order.push(name); }
       map[name].qty += r[2];
-      // 若任一筆未取貨，狀態為未取貨
       if (r[5] !== '已取貨') map[name].status = '未取貨';
     });
 
-    return Object.values(map).sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'));
+    return order.map(n => map[n]);
   }
 
   // ── 客人明細 ──────────────────────────────────────────────
@@ -417,25 +431,66 @@ const SheetDB = (() => {
     return { success: true, count: products.length };
   }
 
+  function getOrderSummary() {
+    const productSheet = getSheet(SHEET.PRODUCTS);
+    const ordersSheet = getSheet(SHEET.ORDERS);
+
+    const productData = productSheet.getDataRange().getValues();
+    const orderData = ordersSheet.getDataRange().getValues();
+
+    // 計算每個品項的總訂購量
+    const totalQty = {};
+    orderData.slice(1).forEach(r => {
+      if (!r[1]) return;
+      totalQty[r[1]] = (totalQty[r[1]] || 0) + Number(r[2]);
+    });
+
+    // 建立群組結構
+    const groupMap = {};
+    const standalone = [];
+
+    productData.slice(1).forEach(r => {
+      if (!r[0]) return;
+      const name = r[0], price = r[1], group = r[5] || '';
+      const qty = totalQty[name] || 0;
+      if (qty === 0) return; // 沒有訂單的品項略過
+
+      if (group) {
+        if (!groupMap[group]) groupMap[group] = { groupName: group, total: 0, variants: [] };
+        groupMap[group].variants.push({ name, price, qty });
+        groupMap[group].total += qty;
+      } else {
+        standalone.push({ name, price, qty });
+      }
+    });
+
+    return {
+      groups: Object.values(groupMap).sort((a, b) => a.groupName.localeCompare(b.groupName, 'zh-TW')),
+      standalone: standalone.sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'))
+    };
+  }
+
   function getAllCustomers() {
     const sheet = getSheet(SHEET.ORDERS);
     const data = sheet.getDataRange().getValues();
     if (data.length <= 1) return [];
 
     const map = {};
+    const order = [];
     data.slice(1).forEach(r => {
       if (!r[0]) return;
       const name = r[0];
-      if (!map[name]) map[name] = { name, qty: 0, status: '已取貨' };
+      if (!map[name]) { map[name] = { name, qty: 0, status: '已取貨' }; order.push(name); }
       map[name].qty += Number(r[2]);
       if (r[5] !== '已取貨') map[name].status = '未取貨';
     });
 
-    return Object.values(map).sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'));
+    return order.map(n => map[n]);
   }
 
   return {
     getProducts,
+    getOrderSummary,
     getAllCustomers,
     getBuyersByProduct,
     getCustomerDetail,
