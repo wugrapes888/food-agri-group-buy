@@ -2094,7 +2094,7 @@ function csvGoStep3() {
   const tbody = document.getElementById('csvPreviewBody');
   tbody.innerHTML = rowOrder.map(customer => {
     const total = csvParsedCols.reduce((s, c) => s + (rowMap[customer][c.name] || 0), 0);
-    return '<tr><td><strong>' + customer + '</strong></td>'
+    return `<tr><td><strong class="csv-name-cell" data-name="${esc(customer)}" onclick="csvInlineEdit(this)" style="cursor:pointer;border-bottom:1px dashed var(--primary);" title="點擊修改名字">${customer}</strong></td>`
       + csvParsedCols.map(c => {
           const q = rowMap[customer][c.name] || 0;
           const style = q > 0 ? 'text-align:center;font-weight:600;color:var(--primary);' : 'text-align:center;color:var(--text-muted);';
@@ -2104,6 +2104,51 @@ function csvGoStep3() {
   }).join('');
 
   showCsvStep(3);
+}
+
+function csvInlineEdit(el) {
+  const oldName = el.dataset.name;
+  const input = document.createElement('input');
+  input.value = oldName;
+  input.style.cssText = 'font-weight:700;border:1.5px solid var(--primary);border-radius:6px;padding:2px 6px;font-size:inherit;width:120px;';
+  el.replaceWith(input);
+  input.focus();
+  input.select();
+
+  function commit() {
+    const newName = input.value.trim();
+    if (newName && newName !== oldName) {
+      csvOrders.forEach(o => { if (o.customer === oldName) o.customer = newName; });
+    }
+    // 重新渲染預覽
+    const customerCount = new Set(csvOrders.map(o => o.customer)).size;
+    document.getElementById('csvSummary').textContent = `共 ${customerCount} 位客人，${csvOrders.length} 筆訂單`;
+    csvRenderPreview();
+  }
+
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } });
+  input.addEventListener('blur', commit);
+}
+
+function csvRenderPreview() {
+  const rowOrder = [];
+  const rowMap = {};
+  csvOrders.forEach(o => {
+    if (!rowMap[o.customer]) { rowMap[o.customer] = {}; rowOrder.push(o.customer); }
+    rowMap[o.customer][o.product] = (rowMap[o.customer][o.product] || 0) + o.qty;
+  });
+
+  const tbody = document.getElementById('csvPreviewBody');
+  tbody.innerHTML = rowOrder.map(customer => {
+    const total = csvParsedCols.reduce((s, c) => s + (rowMap[customer][c.name] || 0), 0);
+    return `<tr><td><strong class="csv-name-cell" data-name="${esc(customer)}" onclick="csvInlineEdit(this)" style="cursor:pointer;border-bottom:1px dashed var(--primary);" title="點擊修改名字">${customer}</strong></td>`
+      + csvParsedCols.map(c => {
+          const q = rowMap[customer][c.name] || 0;
+          const style = q > 0 ? 'text-align:center;font-weight:600;color:var(--primary);' : 'text-align:center;color:var(--text-muted);';
+          return `<td style="${style}">${q > 0 ? q : '–'}</td>`;
+        }).join('')
+      + `<td style="text-align:center;font-weight:700;">${total}</td></tr>`;
+  }).join('');
 }
 
 function csvGoStep1() { showCsvStep(1); }
