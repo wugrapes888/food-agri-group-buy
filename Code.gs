@@ -52,10 +52,10 @@ function createExportFile(rows, title) {
     sheet.getRange(summaryStartRow + 1, 1, 1, 4).setValues([['商品', '訂購總數', '單價', '小計']]);
     sheet.getRange(summaryStartRow + 1, 1, 1, 4).setFontWeight('bold').setBackground('#e8eaf6');
 
-    // 統計每個品項
+    // 統計每個品項（排除「總計」等彙整列）
     const productMap = {};
     const productOrder = [];
-    rows.forEach(r => {
+    rows.filter(r => r.customer !== '總計').forEach(r => {
       if (!productMap[r.product]) {
         productMap[r.product] = { qty: 0, price: r.price || 0 };
         productOrder.push(r.product);
