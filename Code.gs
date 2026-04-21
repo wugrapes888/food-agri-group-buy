@@ -128,6 +128,10 @@ function batchSaveProducts(products) {
   return SheetDB.batchSaveProducts(products);
 }
 
+function toggleProductArrival(productName) {
+  return SheetDB.toggleProductArrival(productName);
+}
+
 function parseTextOrders(text) {
   return OCR.parseText(text);
 }

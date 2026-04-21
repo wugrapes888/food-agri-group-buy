@@ -234,6 +234,7 @@
 
   .dot-pending { background: var(--warning); }
   .dot-picked { background: var(--success); }
+  .dot-waiting { background: #9ca3af; }
 
   /* ── Detail Panel ── */
   .detail-wrap {
@@ -279,8 +280,31 @@
     font-weight: 600;
   }
 
-  .badge-pending { background: var(--warning-light); color: var(--warning); }
-  .badge-picked  { background: var(--success-light); color: var(--success); }
+  .badge-pending  { background: var(--warning-light); color: var(--warning); }
+  .badge-picked   { background: var(--success-light); color: var(--success); }
+  .badge-waiting  { background: #f3f4f6; color: #6b7280; }
+
+  .not-arrived-tag {
+    display: inline-block;
+    font-size: 11px;
+    background: #f3f4f6;
+    color: #9ca3af;
+    padding: 1px 6px;
+    border-radius: 6px;
+    margin-left: 6px;
+  }
+
+  .arrived-toggle {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1.5px solid;
+    cursor: pointer;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .arrived-yes { background: var(--success-light); color: var(--success); border-color: var(--success); }
+  .arrived-no  { background: #f3f4f6; color: #9ca3af; border-color: #d1d5db; }
 
   .order-table {
     width: 100%;
@@ -863,10 +887,11 @@
       <table class="prod-mgmt-table" id="prodMgmtTable">
         <thead>
           <tr>
-            <th style="width:32%">商品名稱</th>
-            <th style="width:16%">單價($)</th>
-            <th style="width:18%">類型</th>
-            <th style="width:26%">備註（如組合內容）</th>
+            <th style="width:28%">商品名稱</th>
+            <th style="width:14%">單價($)</th>
+            <th style="width:15%">類型</th>
+            <th style="width:22%">備註（如組合內容）</th>
+            <th style="width:13%">到貨狀態</th>
             <th style="width:8%"></th>
           </tr>
         </thead>
@@ -938,11 +963,12 @@ function renderProducts() {
     const cls = pct > 0.5 ? 'stock-ok' : pct > 0 ? 'stock-low' : 'stock-zero';
     const active = p.name === activeProduct ? 'active' : '';
     const groupTag = p.isGroup ? '<span style="font-size:10px;background:#e0e7ff;color:#4338ca;padding:1px 6px;border-radius:8px;margin-left:6px;">組合</span>' : '';
+    const notArrivedTag = !p.arrived ? '<span style="font-size:10px;background:#f3f4f6;color:#9ca3af;padding:1px 6px;border-radius:8px;margin-left:6px;">待到貨</span>' : '';
     const priceStr = p.price != null ? `單價 $${p.price}` : '多規格';
     return `
       <div class="product-item ${active}" onclick="selectProduct('${esc(p.name)}')">
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span class="product-name">${p.name}${groupTag}</span>
+          <span class="product-name">${p.name}${groupTag}${notArrivedTag}</span>
           <span class="stock-badge ${cls}">剩 ${p.remainingQty}</span>
         </div>
         <div class="product-meta">
@@ -990,7 +1016,7 @@ function renderBuyers() {
 
   el.innerHTML = filtered.map(b => {
     const active = b.name === activeCustomer ? 'active' : '';
-    const dot = b.status === '已取貨' ? 'dot-picked' : 'dot-pending';
+    const dot = b.status === '已取貨' ? 'dot-picked' : b.status === '尚未到貨' ? 'dot-waiting' : 'dot-pending';
     return `
       <div class="buyer-item ${active}" onclick="selectCustomer('${esc(b.name)}')">
         <div>
@@ -1030,17 +1056,35 @@ function renderDetail(d) {
     return;
   }
 
-  const badgeCls = d.picked ? 'badge-picked' : 'badge-pending';
-  const badgeText = d.picked ? '✅ 已取貨' : '⏳ 待取貨';
+  const hasNotArrived = d.items.some(i => !i.arrived);
+  const badgeCls = d.picked ? (hasNotArrived ? 'badge-waiting' : 'badge-picked') : 'badge-pending';
+  const badgeText = d.picked ? (hasNotArrived ? '📦 到貨品已取' : '✅ 已取貨') : '⏳ 待取貨';
 
-  const rows = d.items.map(i => `
-    <tr>
-      <td>${i.product}</td>
+  const rows = d.items.map(i => {
+    const rowStyle = i.arrived ? '' : 'opacity:0.45;';
+    const notArrivedTag = i.arrived ? '' : '<span class="not-arrived-tag">待到貨</span>';
+    return `
+    <tr style="${rowStyle}">
+      <td>${i.product}${notArrivedTag}</td>
       <td style="text-align:center;">${i.qty}</td>
       <td style="text-align:right;">$${i.price}</td>
-      <td style="text-align:right;font-weight:600;">$${i.subtotal}</td>
+      <td style="text-align:right;font-weight:600;">${i.arrived ? '$' + i.subtotal : '–'}</td>
       <td><button class="del-btn" data-customer="${esc(d.name)}" data-product="${esc(i.product)}" onclick="doDeleteRow(this.dataset.customer,this.dataset.product)" title="刪除此筆">✕</button></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
+
+  const totalSection = hasNotArrived ? `
+    <div class="detail-footer">
+      <span class="total-label">到貨金額</span>
+      <span class="total-amount">$${d.arrivedTotal.toLocaleString()}</span>
+    </div>
+    <div style="text-align:right;font-size:12px;color:var(--text-muted);padding:4px 0 0;">
+      含待到貨品項合計 $${d.allTotal.toLocaleString()}
+    </div>` : `
+    <div class="detail-footer">
+      <span class="total-label">合計金額</span>
+      <span class="total-amount">$${d.allTotal.toLocaleString()}</span>
+    </div>`;
 
   document.getElementById('detailPanel').innerHTML = `
     <div class="detail-card">
@@ -1060,16 +1104,13 @@ function renderDetail(d) {
         </thead>
         <tbody>${rows}</tbody>
       </table>
-      <div class="detail-footer">
-        <span class="total-label">合計金額</span>
-        <span class="total-amount">$${d.total.toLocaleString()}</span>
-      </div>
+      ${totalSection}
     </div>
     <div class="action-row">
       <button class="btn-complete" id="btnComplete"
         onclick="doCompletePickup('${esc(d.name)}')"
         ${d.picked ? 'disabled' : ''}>
-        ${d.picked ? '✅ 已取貨' : '🎉 完成取貨'}
+        ${d.picked ? (hasNotArrived ? '📦 到貨品已取完' : '✅ 已取貨') : '🎉 完成取貨'}
       </button>
       ${d.picked ? `<button class="btn-undo" onclick="doUndoPickup('${esc(d.name)}')">↩ 取消取貨</button>` : ''}
     </div>
@@ -2059,12 +2100,12 @@ let prodRows = [];
 
 function openProductModal() {
   document.getElementById('productModal').classList.remove('hidden');
-  document.getElementById('prodMgmtBody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;"><div class="spinner" style="margin:auto;"></div></td></tr>';
+  document.getElementById('prodMgmtBody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;"><div class="spinner" style="margin:auto;"></div></td></tr>';
 
   google.script.run
     .withSuccessHandler(data => {
       prodRows = data.map(p => ({ ...p }));
-      if (prodRows.length === 0) prodRows.push({ name: '', price: '', type: '一般', note: '' });
+      if (prodRows.length === 0) prodRows.push({ name: '', price: '', type: '一般', note: '', arrived: true });
       renderProdTable();
     })
     .withFailureHandler(err => showToast(err.message, 'error'))
@@ -2077,7 +2118,9 @@ function closeProductModal() {
 
 function renderProdTable() {
   const tbody = document.getElementById('prodMgmtBody');
-  tbody.innerHTML = prodRows.map((p, i) => `
+  tbody.innerHTML = prodRows.map((p, i) => {
+    const isArrived = p.arrived !== false;
+    return `
     <tr>
       <td><input value="${esc(p.name)}" placeholder="商品名稱" onchange="prodRows[${i}].name=this.value" /></td>
       <td><input type="number" value="${p.price}" placeholder="0" min="0" onchange="prodRows[${i}].price=+this.value" /></td>
@@ -2089,12 +2132,19 @@ function renderProdTable() {
         </select>
       </td>
       <td><input value="${esc(p.note||'')}" placeholder="備註" onchange="prodRows[${i}].note=this.value" /></td>
+      <td><button type="button" class="arrived-toggle ${isArrived ? 'arrived-yes' : 'arrived-no'}" onclick="toggleProdArrived(${i})">${isArrived ? '✅ 已到貨' : '⏸ 未到貨'}</button></td>
       <td><button class="del-btn" onclick="removeProdRow(${i})">✕</button></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
+}
+
+function toggleProdArrived(i) {
+  prodRows[i].arrived = prodRows[i].arrived === false ? true : false;
+  renderProdTable();
 }
 
 function addProdRow() {
-  prodRows.push({ name: '', price: '', type: '一般', note: '' });
+  prodRows.push({ name: '', price: '', type: '一般', note: '', arrived: true });
   renderProdTable();
   setTimeout(() => {
     const rows = document.querySelectorAll('#prodMgmtBody tr');
@@ -2104,21 +2154,22 @@ function addProdRow() {
 
 function removeProdRow(i) {
   prodRows.splice(i, 1);
-  if (prodRows.length === 0) prodRows.push({ name: '', price: '', type: '一般', note: '' });
+  if (prodRows.length === 0) prodRows.push({ name: '', price: '', type: '一般', note: '', arrived: true });
   renderProdTable();
 }
 
 function saveAllProducts() {
   // 從 DOM 取最新值
   const rows = document.querySelectorAll('#prodMgmtBody tr');
-  const toSave = Array.from(rows).map(tr => {
+  const toSave = Array.from(rows).map((tr, i) => {
     const inputs = tr.querySelectorAll('input');
     const sel = tr.querySelector('select');
     return {
       name: inputs[0].value.trim(),
       price: parseFloat(inputs[1].value) || 0,
       type: sel ? sel.value : '一般',
-      note: inputs[2].value.trim()
+      note: inputs[2] ? inputs[2].value.trim() : '',
+      arrived: prodRows[i] ? prodRows[i].arrived !== false : true
     };
   }).filter(p => p.name);
 

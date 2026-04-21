@@ -54,7 +54,7 @@ const SheetDB = (() => {
 
     const rows = data.slice(1).filter(r => r[0]).map(r => ({
       name: r[0], price: r[1], totalQty: r[2], remainingQty: r[3],
-      type: r[4] || '一般', group: r[5] || ''
+      type: r[4] || '一般', group: r[5] || '', arrived: r[6] !== '未到貨'
     }));
 
     // 有群組名稱的商品合併成一個群組項目
@@ -64,10 +64,11 @@ const SheetDB = (() => {
     rows.forEach(r => {
       if (r.group) {
         if (!groupMap[r.group]) {
-          groupMap[r.group] = { name: r.group, isGroup: true, totalQty: 0, remainingQty: 0, price: null };
+          groupMap[r.group] = { name: r.group, isGroup: true, totalQty: 0, remainingQty: 0, price: null, arrived: true };
         }
         groupMap[r.group].totalQty += r.totalQty;
         groupMap[r.group].remainingQty += r.remainingQty;
+        if (!r.arrived) groupMap[r.group].arrived = false;
       } else {
         standalone.push({ ...r, isGroup: false });
       }
@@ -112,26 +113,38 @@ const SheetDB = (() => {
   // ── 客人明細 ──────────────────────────────────────────────
 
   function getCustomerDetail(customerName) {
-    const sheet = getSheet(SHEET.ORDERS);
-    const data = sheet.getDataRange().getValues();
-    if (data.length <= 1) return null;
+    const ordersSheet = getSheet(SHEET.ORDERS);
+    const productsSheet = getSheet(SHEET.PRODUCTS);
 
-    const items = data.slice(1)
+    const orderData = ordersSheet.getDataRange().getValues();
+    const productData = productsSheet.getDataRange().getValues();
+
+    if (orderData.length <= 1) return null;
+
+    const arrivalMap = {};
+    productData.slice(1).forEach(r => {
+      if (r[0]) arrivalMap[r[0]] = r[6] !== '未到貨';
+    });
+
+    const items = orderData.slice(1)
       .filter(r => r[0] === customerName)
       .map(r => ({
         product: r[1],
         qty: r[2],
         price: r[3],
         subtotal: r[4],
-        status: r[5]
+        status: r[5],
+        arrived: arrivalMap[r[1]] !== false
       }));
 
     if (items.length === 0) return null;
 
-    const total = items.reduce((s, i) => s + i.subtotal, 0);
-    const picked = items.every(i => i.status === '已取貨');
+    const arrivedItems = items.filter(i => i.arrived);
+    const arrivedTotal = arrivedItems.reduce((s, i) => s + i.subtotal, 0);
+    const allTotal = items.reduce((s, i) => s + i.subtotal, 0);
+    const picked = arrivedItems.length > 0 && arrivedItems.every(i => i.status === '已取貨');
 
-    return { name: customerName, items, total, picked };
+    return { name: customerName, items, arrivedTotal, allTotal, picked };
   }
 
   // ── 完成取貨（同步扣庫存）────────────────────────────────
@@ -143,12 +156,19 @@ const SheetDB = (() => {
     const orderData = ordersSheet.getDataRange().getValues();
     const productData = productsSheet.getDataRange().getValues();
 
+    const arrivalMap = {};
+    productData.slice(1).forEach(r => {
+      if (r[0]) arrivalMap[r[0]] = r[6] !== '未到貨';
+    });
+
     const deduct = {};
 
     for (let i = 1; i < orderData.length; i++) {
-      if (orderData[i][0] === customerName && orderData[i][5] !== '已取貨') {
+      if (orderData[i][0] === customerName && orderData[i][5] === '未取貨') {
+        const p = orderData[i][1];
+        if (arrivalMap[p] === false) continue; // 未到貨的品項跳過
         ordersSheet.getRange(i + 1, 6).setValue('已取貨');
-        const p = orderData[i][1], q = orderData[i][2];
+        const q = orderData[i][2];
         deduct[p] = (deduct[p] || 0) + q;
       }
     }
@@ -376,41 +396,56 @@ const SheetDB = (() => {
     const sheet = getSheet(SHEET.PRODUCTS);
     const data = sheet.getDataRange().getValues();
     if (data.length <= 1) return [];
-    // 回傳含 type 欄（第5欄，index 4），若無則為空
     return data.slice(1).filter(r => r[0]).map(r => ({
       name: r[0],
       price: r[1],
       type: r[4] || '一般',
-      note: r[5] || ''
+      note: r[5] || '',
+      arrived: r[6] !== '未到貨'
     }));
   }
 
   function saveProduct(product) {
-    // product: { name, price, type, note }
+    // product: { name, price, type, note, arrived }
     const sheet = getSheet(SHEET.PRODUCTS);
     const data = sheet.getDataRange().getValues();
 
-    // 確保欄位夠用（擴充至6欄）
     if (data[0].length < 6) {
       sheet.getRange(1, 5).setValue('類型');
       sheet.getRange(1, 6).setValue('備註');
     }
+    if (data[0].length < 7) sheet.getRange(1, 7).setValue('到貨狀態');
 
-    // 找是否已存在
+    const arrivedVal = product.arrived === false ? '未到貨' : '已到貨';
+
     for (let i = 1; i < data.length; i++) {
       if (data[i][0] === product.name) {
         sheet.getRange(i + 1, 2).setValue(product.price);
         sheet.getRange(i + 1, 5).setValue(product.type || '一般');
         sheet.getRange(i + 1, 6).setValue(product.note || '');
+        sheet.getRange(i + 1, 7).setValue(arrivedVal);
         SpreadsheetApp.flush();
         return { success: true, action: 'updated' };
       }
     }
 
-    // 新增
-    sheet.appendRow([product.name, product.price, 0, 0, product.type || '一般', product.note || '']);
+    sheet.appendRow([product.name, product.price, 0, 0, product.type || '一般', product.note || '', arrivedVal]);
     SpreadsheetApp.flush();
     return { success: true, action: 'created' };
+  }
+
+  function toggleProductArrival(productName) {
+    const sheet = getSheet(SHEET.PRODUCTS);
+    const data = sheet.getDataRange().getValues();
+    if (data[0].length < 7) sheet.getRange(1, 7).setValue('到貨狀態');
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === productName) {
+        const cur = data[i][6] || '已到貨';
+        sheet.getRange(i + 1, 7).setValue(cur === '未到貨' ? '已到貨' : '未到貨');
+      }
+    }
+    SpreadsheetApp.flush();
+    return { success: true };
   }
 
   function deleteProduct(name) {
@@ -535,6 +570,7 @@ const SheetDB = (() => {
     batchSaveProducts,
     deleteOrderRow,
     deleteCustomerAllOrders,
-    getOrdersForExport
+    getOrdersForExport,
+    toggleProductArrival
   };
 })();
