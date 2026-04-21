@@ -1089,7 +1089,7 @@ function renderDetail(d) {
   document.getElementById('detailPanel').innerHTML = `
     <div class="detail-card">
       <div class="detail-card-header">
-        <span class="customer-name-big">${d.name}</span>
+        <span class="customer-name-big">${d.name}<button onclick="doRenameCustomer('${esc(d.name)}')" title="修改名字" style="margin-left:8px;background:none;border:none;cursor:pointer;font-size:15px;opacity:0.5;">✏️</button></span>
         <span class="status-badge ${badgeCls}">${badgeText}</span>
       </div>
       <table class="order-table">
@@ -1139,6 +1139,21 @@ function doCompletePickup(customerName) {
       btn.textContent = '🎉 完成取貨';
     })
     .completePickup(customerName);
+}
+
+function doRenameCustomer(oldName) {
+  const newName = prompt(`「${oldName}」的新名字：`, oldName);
+  if (!newName || newName.trim() === '' || newName.trim() === oldName) return;
+  const trimmed = newName.trim();
+  google.script.run
+    .withSuccessHandler(() => {
+      showToast(`已將「${oldName}」改名為「${trimmed}」`, 'success');
+      if (activeCustomer === oldName) activeCustomer = trimmed;
+      refreshAll();
+      loadDetail(trimmed);
+    })
+    .withFailureHandler(err => showToast(err.message, 'error'))
+    .renameCustomer(oldName, trimmed);
 }
 
 function doDeleteRow(customerName, productName) {

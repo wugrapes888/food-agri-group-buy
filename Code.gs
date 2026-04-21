@@ -132,6 +132,10 @@ function toggleProductArrival(productName) {
   return SheetDB.toggleProductArrival(productName);
 }
 
+function renameCustomer(oldName, newName) {
+  return SheetDB.renameCustomer(oldName, newName);
+}
+
 function parseTextOrders(text) {
   return OCR.parseText(text);
 }

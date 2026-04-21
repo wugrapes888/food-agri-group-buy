@@ -361,6 +361,16 @@ const SheetDB = (() => {
     return { success: true };
   }
 
+  function renameCustomer(oldName, newName) {
+    const sheet = getSheet(SHEET.ORDERS);
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === oldName) sheet.getRange(i + 1, 1).setValue(newName);
+    }
+    SpreadsheetApp.flush();
+    return { success: true };
+  }
+
   function deleteCustomerAllOrders(customerName) {
     const ordersSheet = getSheet(SHEET.ORDERS);
     const orderData = ordersSheet.getDataRange().getValues();
@@ -571,6 +581,7 @@ const SheetDB = (() => {
     deleteOrderRow,
     deleteCustomerAllOrders,
     getOrdersForExport,
-    toggleProductArrival
+    toggleProductArrival,
+    renameCustomer
   };
 })();
